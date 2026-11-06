@@ -5,6 +5,6 @@ lalu pembayaran dikonfirmasi otomatis lewat app Android pendengar notifikasi.
 
 - `docs/PRD.md` — dokumen kebutuhan produk
 - `apps/web` — dashboard owner dan halaman checkout (Next.js)
-- `apps/api` — backend NestJS (Tahap 1: Core QRIS)
+- `apps/api` — backend NestJS + PostgreSQL (Tahap 1 Core QRIS, Tahap 2 transaksi/device/webhook)
 
 Menyusul: app listener Android (Kotlin).

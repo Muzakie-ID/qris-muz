@@ -1,60 +1,115 @@
 # qrismuz — api (NestJS)
 
-Backend payment gateway QRIS. **Tahap 1: Core QRIS**: membaca QRIS statis,
-memvalidasi CRC, mengubahnya menjadi QRIS dinamis bernominal, dan membuat gambar QR.
+Backend payment gateway QRIS dinamis. PostgreSQL saja, tanpa Redis.
+
+- **Tahap 1, Core QRIS** (`src/qris/core`): baca dan validasi QRIS, ubah statis → dinamis, CRC16.
+- **Tahap 2, MVP otomatis**: API transaksi dengan kode unik per QRIS, API device untuk HP listener,
+  parser dan pencocokan, webhook bertanda tangan dengan retry, kedaluwarsa otomatis, halaman checkout
+  realtime (SSE), dan endpoint admin.
 
 ## Menjalankan
 
 ```bash
 cd apps/api
 npm install
-cp .env.example .env     # lalu isi QRIS_STATIC_PAYLOAD
-npm run start:dev        # http://localhost:3001
+cp .env.example .env        # isi DATABASE_URL, APP_ENCRYPTION_KEY, ADMIN_TOKEN
+npm run db:migrate
+npm run start:dev           # http://localhost:3001
 ```
 
-`QRIS_STATIC_PAYLOAD` adalah teks hasil scan QRIS statis merchant (diawali `000201`).
-Bisa didapat dengan men-scan QR merchant memakai aplikasi pembaca QR biasa (bukan e-wallet).
-
-## Uji gerbang Tahap 1: QR terbaca di semua e-wallet
-
-Cara cepat tanpa server:
+## Menyiapkan pertama kali (pakai ADMIN_TOKEN)
 
 ```bash
-npm run qris -- inspect "<qris statis>"
-npm run qris -- dynamic "<qris statis>" 1000 qris-1000.png
+H='Authorization: Bearer <ADMIN_TOKEN>'; J='Content-Type: application/json'
+
+# 1. Daftarkan QRIS statis, satu per aplikasi merchant.
+curl -X POST localhost:3001/admin/qris-sources -H "$H" -H "$J" \
+  -d '{"label":"DANA Bisnis","payload":"000201...","source_package":"<package DANA Bisnis>"}'
+
+# 2. Buat proyek. webhook_secret hanya muncul sekali: simpan.
+curl -X POST localhost:3001/admin/projects -H "$H" -H "$J" \
+  -d '{"name":"KursusKu","webhook_url":"https://kursusku.id/webhook","default_qris_source_id":"qrs_..."}'
+
+# 3. Buat API key untuk proyek itu. api_key hanya muncul sekali.
+curl -X POST localhost:3001/admin/projects/prj_.../api-keys -H "$H"
+
+# 4. Token pairing untuk HP listener (berlaku 10 menit).
+curl -X POST localhost:3001/admin/devices/pairing-tokens -H "$H" -H "$J" -d '{"device_name":"Redmi Note 7"}'
 ```
 
-Atau lewat server (butuh `QRIS_TOOLS_ENABLED=true`): buka
-`http://localhost:3001/v1/qris/dynamic.png?amount=1000` di browser, lalu scan
-dengan beberapa e-wallet/m-banking. Lolos bila setiap aplikasi menampilkan nama
-merchant yang benar dan nominal Rp1.000 yang **tidak bisa diubah**.
+`source_package` boleh dikosongkan dulu dan diisi nanti, setelah nama package diketahui lewat mode
+deteksi listener. Notifikasi dari package yang belum terdaftar tetap disimpan, lalu bisa diproses ulang
+lewat `POST /admin/events/reprocess`.
 
-## Endpoint (alat uji, aktif bila `QRIS_TOOLS_ENABLED=true`)
+## API untuk proyek (header `Authorization: Bearer <api_key>`)
 
 | Method | Rute | Isi |
 |---|---|---|
-| GET | `/health` | Cek server hidup (selalu aktif) |
-| POST | `/v1/qris/inspect` | `{ payload }` → valid/tidak, nama merchant, NMID, dll. |
-| POST | `/v1/qris/dynamic` | `{ amount, payload? }` → QRIS dinamis + gambar SVG |
-| GET | `/v1/qris/dynamic.png?amount=` | Gambar PNG dari QRIS statis yang disetel |
+| POST | `/v1/transactions` | `{ amount, merchant_ref, expiry_min?, return_url?, metadata?, qris_source_id? }`, header `Idempotency-Key` disarankan |
+| GET | `/v1/transactions/:id` | Status dan detail |
+| POST | `/v1/transactions/:id/cancel` | Batalkan yang masih `PENDING` |
+| GET | `/v1/status` | `listener_online`, `confirmation: realtime | delayed` |
 
-Kesalahan QRIS dibalas `422` dengan `code` yang stabil, mis. `CRC_MISMATCH`,
-`NOT_STATIC`, `INVALID_AMOUNT`. Saat alat uji dimatikan, rute `/v1/qris/*` membalas 404.
+Respons transaksi berisi `final_amount` (nominal yang harus dibayar), `qris_payload`, `qr_image_url`,
+dan `checkout_url` untuk mengarahkan pembeli.
 
-## Cara kerja konversi (`src/qris/core`)
+### Webhook ke proyek
 
-1. Payload dibaca sebagai TLV EMVCo dan divalidasi: diawali `000201`, CRC tag 63 cocok,
-   mata uang 360, ada nama/kota merchant dan akun merchant (tag 26–51).
-2. Tag 01 diubah `11` → `12` (dinamis).
-3. Tag 54 diisi nominal (bilangan bulat rupiah), ditempatkan sesuai urutan tag.
-4. Tag 55–57 (tip/biaya yang bisa diubah pembeli) dibuang agar nominal terkunci.
-5. CRC16-CCITT dihitung ulang.
+Event: `transaction.paid`, `transaction.expired`, `transaction.late_paid`. Header:
+`X-Event-Id` (tetap sama di setiap percobaan ulang), `X-Event-Type`, `X-Timestamp` (ms), dan
+`X-Signature = hex(HMAC-SHA256(webhook_secret, X-Timestamp + "." + body))`.
+Balas 2xx bila diterima; selain itu dikirim ulang 8 kali dalam ±24 jam.
 
-Kode ini murni TypeScript tanpa ketergantungan Nest, jadi bisa dipakai ulang.
+Contoh verifikasi di Node.js:
+
+```js
+const expected = crypto.createHmac('sha256', WEBHOOK_SECRET)
+  .update(`${req.headers['x-timestamp']}.${rawBody}`).digest('hex');
+if (!crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(req.headers['x-signature']))) return res.sendStatus(401);
+if (Math.abs(Date.now() - Number(req.headers['x-timestamp'])) > 5 * 60_000) return res.sendStatus(401);
+// Simpan X-Event-Id yang sudah diproses agar kiriman ganda diabaikan.
+```
+
+## API device (untuk aplikasi listener)
+
+| Method | Rute | Isi |
+|---|---|---|
+| POST | `/device/register` | `{ token }` → `device_id`, `secret` (sekali saja) |
+| POST | `/device/events` | `{ events: [{ package, title, text, big_text?, sub_text?, posted_at, notification_key, app_version?, captured_at?, hash, is_test? }] }` (maks 50) |
+| POST | `/device/heartbeat` | `{ listener_ok, battery?, charging?, queued?, source_app_versions? }` |
+| GET | `/device/config` | Daftar package yang perlu dikirim |
+
+Semua kecuali register wajib header `X-Device-Id`, `X-Timestamp` (ms), `X-Nonce` (8–64 karakter
+`A-Za-z0-9_-`, sekali pakai), dan `X-Signature = hex(HMAC-SHA256(secret, timestamp + "." + nonce + "." + body mentah))`.
+
+## Halaman checkout (publik, untuk web app)
+
+`GET /public/checkout/:id`, `GET /public/checkout/:id/qr.png` (hanya saat masih bisa dibayar),
+dan `GET /public/checkout/:id/events` (Server-Sent Events; status dikirim begitu berubah).
+
+## Admin (header `Authorization: Bearer <ADMIN_TOKEN>`)
+
+QRIS (`/admin/qris-sources`), proyek dan API key (`/admin/projects`, `/admin/api-keys/:id/revoke`),
+perangkat (`/admin/devices`, pairing, cabut), konfirmasi manual (`POST /admin/transactions/:id/confirm`
+dengan `{ reason }`), log webhook dan kirim ulang, daftar event (`/admin/events?parse_status=UNPARSED`),
+dan proses ulang event (`POST /admin/events/reprocess`). Semua aksi tercatat di `audit_logs`.
+
+## Cara kerja penting
+
+- **Kode unik**: 1–999 dipilih acak per QRIS, dengan kunci per QRIS di PostgreSQL (advisory lock) agar
+  tidak bentrok. Nominal akhir tetap dikunci selama masa tenggang (`UNIQUE_CODE_GRACE_HOURS`) setelah
+  kedaluwarsa, supaya pembayaran telat tidak masuk ke tagihan baru.
+- **Pencocokan**: notifikasi dari package QRIS X hanya dicocokkan dengan tagihan QRIS X. Lunas
+  sebelum kedaluwarsa = `PAID`; sesudahnya (masih masa tenggang) = `LATE_PAID`, keputusan di owner.
+  Pembayaran tanpa tagihan yang cocok dicatat `UNMATCHED` untuk ditinjau.
+- **Parser**: pola regex di tabel `parsers`. Pola umum (`auto_match = false`) hanya mencatat nominal
+  tanpa melunasi otomatis, agar notifikasi seperti penarikan dana tidak salah dianggap pembayaran.
+- **Webhook**: dicatat di transaksi database yang sama dengan perubahan status (outbox), lalu dikirim
+  tugas berkala tiap 5 detik.
 
 ## Test
 
 ```bash
-npm test          # unit test (CRC, TLV, parse, konversi, config)
-npm run test:e2e  # endpoint HTTP
+npm test          # unit test
+npm run test:e2e  # alur lengkap dengan PostgreSQL (TEST_DATABASE_URL, bawaan: database qrismuz_test lokal)
 ```
