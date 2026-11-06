@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">qrismuz Listener</string>
+    <string name="channel_status">Status listener</string>
+    <string name="fgs_title">Listener aktif</string>
+    <string name="fgs_text">Meneruskan notifikasi pembayaran ke server</string>
+</resources>

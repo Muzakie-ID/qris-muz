@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.Listener" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:statusBarColor">#F3F3F2</item>
+        <item name="android:navigationBarColor">#F3F3F2</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:windowBackground">@color/canvas</item>
+    </style>
+    <color name="canvas">#F3F3F2</color>
+    <color name="launcher_bg">#111111</color>
+</resources>

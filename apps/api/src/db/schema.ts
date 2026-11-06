@@ -18,6 +18,14 @@ const createdAt = () => ts('created_at').notNull().defaultNow();
 /** Nominal rupiah. bigint agar aman untuk jumlah besar, dibaca sebagai number. */
 const rupiah = (name: string) => bigint(name, { mode: 'number' });
 
+/** Perintah jarak jauh yang dimengerti aplikasi listener. */
+export const DEVICE_COMMANDS = [
+  'rescan',
+  'refresh_config',
+  'flush_queue',
+] as const;
+export type DeviceCommand = (typeof DEVICE_COMMANDS)[number];
+
 export const transactionStatus = pgEnum('transaction_status', [
   'PENDING',
   'PAID',
@@ -107,6 +115,14 @@ export const devices = pgTable('devices', {
     Record<string, string>
   >(),
   clockSkewMs: integer('clock_skew_ms'),
+  appVersion: text('app_version'),
+  lastCrash: text('last_crash'),
+  lastCrashAt: ts('last_crash_at'),
+  /** Perintah dari dashboard yang diambil listener lewat heartbeat berikutnya. */
+  pendingCommands: jsonb('pending_commands')
+    .$type<DeviceCommand[]>()
+    .notNull()
+    .default([]),
   revokedAt: ts('revoked_at'),
   createdAt: createdAt(),
 });

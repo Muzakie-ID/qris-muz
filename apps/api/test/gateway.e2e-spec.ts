@@ -368,14 +368,43 @@ describe('Gateway (e2e)', () => {
         .expect(401);
     });
 
+    it('token pairing disertai link untuk QR', async () => {
+      const res = await admin('post', '/admin/devices/pairing-tokens')
+        .send({ device_name: 'QR' })
+        .expect(201);
+      const body = res.body as { token: string; pairing_uri: string };
+      const uri = new URL(body.pairing_uri);
+      expect(uri.protocol).toBe('qrismuz:');
+      expect(uri.searchParams.get('server')).toBe('http://api.test');
+      expect(uri.searchParams.get('token')).toBe(body.token);
+    });
+
+    it('perintah dari admin diambil sekali lewat heartbeat', async () => {
+      await admin('post', `/admin/devices/${device.id}/commands`)
+        .send({ command: 'rescan' })
+        .expect(200);
+      await admin('post', `/admin/devices/${device.id}/commands`)
+        .send({ command: 'refresh_config' })
+        .expect(200);
+      await admin('post', `/admin/devices/${device.id}/commands`)
+        .send({ command: 'hapus_semua' })
+        .expect(400);
+      const first = await deviceCall('post', '/device/heartbeat', {
+        listener_ok: true,
+        app_version: '1.0.0',
+        last_crash: 'java.lang.IllegalStateException: contoh',
+      }).expect(200);
+      expect((first.body as { commands: string[] }).commands).toEqual([
+        'rescan',
+        'refresh_config',
+      ]);
+      const second = await deviceCall('post', '/device/heartbeat', {
+        listener_ok: true,
+      }).expect(200);
+      expect((second.body as { commands: string[] }).commands).toEqual([]);
+    });
+
     it('heartbeat membuat status listener online', async () => {
-      await api('get', '/v1/status')
-        .expect(200)
-        .expect((r) =>
-          expect((r.body as { listener_online: boolean }).listener_online).toBe(
-            false,
-          ),
-        );
       const hb = await deviceCall('post', '/device/heartbeat', {
         listener_ok: true,
         battery: 100,

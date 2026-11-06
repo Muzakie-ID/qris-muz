@@ -10,7 +10,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { AuditService } from '../common/audit.service';
-import { PairingTokenDto } from '../devices/devices.dto';
+import { DeviceCommandDto, PairingTokenDto } from '../devices/devices.dto';
 import { DevicesService } from '../devices/devices.service';
 import { PaymentsService } from '../payments/payments.service';
 import { ProjectsService, type Project } from '../projects/projects.service';
@@ -168,6 +168,13 @@ export class AdminController {
   @Post('devices/pairing-tokens')
   createPairing(@Body() dto: PairingTokenDto) {
     return this.devices.createPairingToken(dto.device_name);
+  }
+
+  /** Perintah jarak jauh: rescan, refresh_config, atau flush_queue. */
+  @Post('devices/:id/commands')
+  @HttpCode(200)
+  queueCommand(@Param('id') id: string, @Body() dto: DeviceCommandDto) {
+    return this.devices.queueCommand(id, dto.command);
   }
 
   @Post('devices/:id/revoke')

@@ -14,7 +14,12 @@ import { newId } from '../common/ids';
 import { SecretsService } from '../common/secrets.service';
 import type { Env } from '../config/env';
 import { DB, type Db } from '../db/db.module';
-import { deviceNonces, devicePairingTokens, devices } from '../db/schema';
+import {
+  deviceNonces,
+  devicePairingTokens,
+  devices,
+  type DeviceCommand,
+} from '../db/schema';
 import { QrisSourcesService } from '../qris/qris-sources.service';
 
 export type Device = typeof devices.$inferSelect;
@@ -28,6 +33,8 @@ export interface HeartbeatInput {
   charging?: boolean;
   queued?: number;
   source_app_versions?: Record<string, string>;
+  app_version?: string;
+  last_crash?: string;
 }
 
 @Injectable()
@@ -66,7 +73,13 @@ export class DevicesService implements OnModuleInit, OnModuleDestroy {
       expiresAt,
     });
     await this.audit.log('device.pairing_token_created', null, { deviceName });
-    return { token, expires_at: expiresAt.toISOString() };
+    const server = this.config.get('PUBLIC_API_URL', { infer: true });
+    return {
+      token,
+      expires_at: expiresAt.toISOString(),
+      // Isi QR pairing: listener cukup memindai ini.
+      pairing_uri: `qrismuz://pair?server=${encodeURIComponent(server)}&token=${encodeURIComponent(token)}`,
+    };
   }
 
   /** Menukar token pairing dengan device_id dan secret. Secret hanya dikirim sekali. */
@@ -137,23 +150,51 @@ export class DevicesService implements OnModuleInit, OnModuleDestroy {
     input: HeartbeatInput,
     deviceTimestamp: number,
   ) {
-    await this.db
-      .update(devices)
-      .set({
-        lastHeartbeatAt: new Date(),
-        listenerOk: input.listener_ok,
-        battery: input.battery ?? null,
-        charging: input.charging ?? null,
-        queued: input.queued ?? null,
-        sourceAppVersions: input.source_app_versions ?? null,
-        clockSkewMs: Date.now() - deviceTimestamp,
-      })
-      .where(eq(devices.id, device.id));
+    const commands = await this.db.transaction(async (tx) => {
+      const [current] = await tx
+        .select({ pending: devices.pendingCommands })
+        .from(devices)
+        .where(eq(devices.id, device.id))
+        .for('update');
+      await tx
+        .update(devices)
+        .set({
+          lastHeartbeatAt: new Date(),
+          listenerOk: input.listener_ok,
+          battery: input.battery ?? null,
+          charging: input.charging ?? null,
+          queued: input.queued ?? null,
+          sourceAppVersions: input.source_app_versions ?? null,
+          clockSkewMs: Date.now() - deviceTimestamp,
+          appVersion: input.app_version ?? null,
+          ...(input.last_crash && {
+            lastCrash: input.last_crash,
+            lastCrashAt: new Date(),
+          }),
+          pendingCommands: [],
+        })
+        .where(eq(devices.id, device.id));
+      return current?.pending ?? [];
+    });
     return {
       server_time: Date.now(),
       next_heartbeat_sec: HEARTBEAT_INTERVAL_SEC,
-      commands: [] as string[],
+      commands,
     };
+  }
+
+  /** Menitipkan perintah untuk listener; dijalankan saat heartbeat berikutnya (≤ 1 menit). */
+  async queueCommand(id: string, command: DeviceCommand) {
+    const device = await this.findActive(id);
+    if (!device)
+      throw new NotFoundException('Device tidak ditemukan atau sudah dicabut.');
+    const next = Array.from(new Set([...device.pendingCommands, command]));
+    await this.db
+      .update(devices)
+      .set({ pendingCommands: next })
+      .where(eq(devices.id, id));
+    await this.audit.log('device.command_queued', id, { command });
+    return { pending_commands: next };
   }
 
   async configFor() {

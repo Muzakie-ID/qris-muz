@@ -3,6 +3,7 @@ import {
   ArrayMaxSize,
   IsArray,
   IsBoolean,
+  IsIn,
   IsInt,
   IsNotEmpty,
   IsObject,
@@ -13,6 +14,7 @@ import {
   Min,
   ValidateNested,
 } from 'class-validator';
+import { DEVICE_COMMANDS, type DeviceCommand } from '../db/schema';
 
 export class RegisterDeviceDto {
   @IsString()
@@ -64,6 +66,13 @@ export class HeartbeatDto {
   @IsOptional() @IsBoolean() charging?: boolean;
   @IsOptional() @IsInt() @Min(0) queued?: number;
   @IsOptional() @IsObject() source_app_versions?: Record<string, string>;
+  @IsOptional() @IsString() @MaxLength(50) app_version?: string;
+  @IsOptional() @IsString() @MaxLength(4000) last_crash?: string;
+}
+
+export class DeviceCommandDto {
+  @IsIn(DEVICE_COMMANDS)
+  command!: DeviceCommand;
 }
 
 export class PairingTokenDto {
