@@ -1,0 +1,33 @@
+@import "tailwindcss";
+
+/* Token warna mengikuti mockup: abu-abu netral, aksen hitam, hijau untuk sukses. */
+@theme {
+  --font-sans: var(--font-geist-sans), system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+
+  --color-canvas: #f3f3f2;
+  --color-surface: #ffffff;
+  --color-subtle: #f1f1ef;
+  --color-line: #e6e6e3;
+  --color-line-soft: #efefed;
+  --color-ink: #111111;
+  --color-ink-2: #2c2c2a;
+  --color-muted: #4a4a47;
+  --color-faint: #62625f;
+
+  --color-ok: #157f3c;
+  --color-ok-bg: #e8f6ec;
+  --color-ok-dot: #1f9d55;
+  --color-bad: #b42318;
+  --color-bad-bg: #fdecea;
+  --color-warn: #8a4b05;
+  --color-warn-icon: #a15c07;
+  --color-warn-bg: #fdf3e1;
+  --color-warn-dot: #c47a12;
+}
+
+body {
+  background: var(--color-canvas);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+}
