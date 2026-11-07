@@ -115,7 +115,8 @@ qris-muz/
 │   ├── web/          Dashboard + checkout  → apps/web/README.md
 │   └── listener/     Aplikasi Android      → apps/listener/README.md
 └── docs/
-    └── PRD.md        Dokumen kebutuhan produk (salinan awal)
+    ├── PRD.md            Dokumen kebutuhan produk (gateway)
+    └── PRD-listener.md   Dokumen kebutuhan aplikasi listener
 ```
 
 ## Status pengerjaan

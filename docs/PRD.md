@@ -2,7 +2,7 @@
 
 Nov 7, 2026 · @muzakie
 
-> Sumber: https://claude.ai/artifact/5ESzKh4SMAdQjUm2YBpQ2z (versi final; diagram hanya ada di dokumen asli)
+> Salinan dari dokumen PRD online per 7 Nov 2026. Keputusan teknis yang muncul saat implementasi (mis. PostgreSQL tanpa Redis) sudah dimasukkan. Status pengerjaan ada di [README](../README.md#status-pengerjaan).
 
 ## Ringkasan
 
@@ -18,6 +18,8 @@ Payment gateway pribadi, dipakai bersama oleh semua proyek milik owner, yang men
 - Tidak ada pembayaran yang hilang: setiap mutasi tercatat, termasuk yang gagal dibaca atau datang terlambat.
 
 **Di luar lingkup (fase awal):** melayani merchant pihak ketiga, refund otomatis ke pembeli, dan integrasi resmi dengan PJP.
+
+**Aplikasi listener Android** punya PRD sendiri: [PRD-listener.md](PRD-listener.md).
 
 ## Pengguna dan use case
 
@@ -39,14 +41,14 @@ Ada tiga jenis pengguna; owner adalah pengguna utama di fase awal.
 
 ## Fitur dan prioritas
 
-MVP berisi 19 fitur yang cukup untuk menerima pembayaran otomatis dari proyek sendiri; 9 fitur sisanya memperhalus pengalaman dan masuk Fase 2.
+MVP berisi 20 fitur yang cukup untuk menerima pembayaran otomatis dari proyek sendiri; 8 fitur sisanya memperhalus pengalaman dan masuk Fase 2.
 
 | Modul | Fitur | Prioritas |
 | --- | --- | --- |
 | Core QRIS | Upload dan decode QRIS statis, validasi CRC, format EMVCo, dan nama merchant | MVP |
 | Core QRIS | Generate QRIS dinamis: tag 01 jadi 12, sisip tag 54 (nominal), hitung ulang CRC16 | MVP |
 | Core QRIS | Kode unik nominal 1–999, dikunci selama transaksi aktif plus masa tenggang setelah expired (misal 24 jam), agar pembayaran telat tidak tercocokkan ke order baru bernominal sama | MVP |
-| Core QRIS | Beberapa QRIS per owner (lebih dari satu merchant) | Fase 2 |
+| Core QRIS | Beberapa QRIS per owner (lebih dari satu merchant): DANA Bisnis dan GoPay Merchant, kode unik dikunci per QRIS | MVP |
 | Listener Android | NotificationListenerService dengan filter package, kirim teks mentah ke server | MVP |
 | Listener Android | Antrian offline (Room) dan retry otomatis (WorkManager) | MVP |
 | Listener Android | Heartbeat: status listener, baterai, versi app sumber notifikasi | MVP |
@@ -54,7 +56,7 @@ MVP berisi 19 fitur yang cukup untuk menerima pembayaran otomatis dari proyek se
 | Listener Android | Pairing device via token dari dashboard, secret di Android Keystore | MVP |
 | Parser dan matching | Parser di server: regex per package plus fallback generik | MVP |
 | Parser dan matching | Status UNPARSED, alarm ke owner, proses ulang event setelah parser diperbarui | MVP |
-| Parser dan matching | Matching nominal unik dalam jendela waktu, termasuk pembayaran telat | MVP |
+| Parser dan matching | Matching nominal unik dalam jendela waktu, termasuk pembayaran telat, hanya dengan transaksi dari sumber QRIS yang sama | MVP |
 | Parser dan matching | Editor dan penguji regex di dashboard | Fase 2 |
 | Transaksi | Siklus status PENDING, PAID, EXPIRED, CANCELLED, LATE\_PAID dengan expired otomatis | MVP |
 | Transaksi | Idempotency key agar order tidak tercatat dobel | MVP |
@@ -74,7 +76,7 @@ MVP berisi 19 fitur yang cukup untuk menerima pembayaran otomatis dari proyek se
 
 ## Alur sistem
 
-> _Diagram (alur pembayaran · 5 langkah, 1 percabangan) ada di dokumen asli._
+> Diagram alur pembayaran: lihat [README › Cara kerja](../README.md#cara-kerja).
 
 Jalur normal selesai otomatis dari langkah 1 sampai 5; event yang gagal dibaca atau tidak cocok ditahan sampai owner menindaklanjuti. Transaksi yang tidak dibayar sampai batas waktu berubah jadi EXPIRED dan kode uniknya dilepas setelah masa tenggang.
 
@@ -108,7 +110,7 @@ Angka-angka di atas adalah target awal yang bisa disesuaikan setelah uji coba.
 
 ## Arsitektur dan tech stack
 
-> _Diagram (arsitektur · 4 klien, 5 modul backend, 2 penyimpanan) ada di dokumen asli._
+> Diagram komponen: lihat [README › Arsitektur](../README.md#arsitektur).
 
 Semua klien masuk lewat satu backend; HP listener hanya mengirim teks mentah, sementara semua logika parsing dan pencocokan ada di server agar bisa diubah tanpa rilis ulang app.
 
@@ -117,7 +119,7 @@ Semua klien masuk lewat satu backend; HP listener hanya mengirim teks mentah, se
 | Backend | Node.js + NestJS (TypeScript) | Modular, satu bahasa dengan frontend |
 | Web app (checkout + dashboard) | Next.js + Tailwind | Satu codebase untuk halaman bayar dan dashboard |
 | Database | PostgreSQL | Transaksi dan constraint unik yang kuat |
-| Cache dan antrian | Redis + BullMQ | Kunci kode unik ber-TTL, retry webhook terjadwal |
+| Antrian dan kunci | PostgreSQL (advisory lock, tabel antrian, tugas berkala) | Satu layanan lebih sedikit di VPS; kunci kode unik dan retry webhook tetap aman di satu database |
 | Generate QR | Fungsi CRC16-CCITT sendiri + library qrcode | Logika konversi QRIS tetap di tangan sendiri |
 | App listener | Kotlin, NotificationListenerService, Room, WorkManager, Android Keystore | Native, andal di background, secret aman |
 | Notifikasi owner | Telegram Bot API | Gratis dan instan |
@@ -132,9 +134,9 @@ Sepuluh tabel PostgreSQL; `transactions` dan `payment_events` adalah inti, dihub
 | Tabel | Kolom penting | Catatan |
 | --- | --- | --- |
 | users | id, email, password\_hash, totp\_secret, created\_at | Owner/admin |
-| projects | id, user\_id, name, webhook\_url, webhook\_secret, default\_expiry\_min, default\_return\_url | Satu per proyek yang memakai gateway |
+| projects | id, user\_id, name, webhook\_url, webhook\_secret, default\_expiry\_min, default\_return\_url, default\_qris\_source\_id | Satu per proyek yang memakai gateway |
 | api\_keys | id, project\_id, key\_hash, prefix, mode (live/sandbox), last\_used\_at, revoked\_at | Simpan hash saja |
-| qris\_sources | id, user\_id, raw\_payload, merchant\_name, nmid, is\_active | QRIS statis hasil upload |
+| qris\_sources | id, user\_id, raw\_payload, merchant\_name, nmid, is\_active, source\_package (aplikasi asal notifikasinya) | QRIS statis hasil upload |
 | devices | id, user\_id, name, secret\_enc, last\_heartbeat\_at, listener\_ok, battery, source\_app\_versions | HP listener |
 | transactions | id, project\_id, qris\_source\_id, merchant\_ref, base\_amount, unique\_code, final\_amount, qris\_payload, status, idempotency\_key, expires\_at, paid\_at, matched\_event\_id, return\_url, metadata (jsonb) | Partial unique index (qris\_source\_id, final\_amount) WHERE status = 'PENDING'; ID acak (UUID/ULID), bukan auto-increment |
 | payment\_events | id, device\_id, package\_name, raw\_text, posted\_at, hash, parsed\_amount, parse\_status, parser\_id | Mentah dari HP, hash (package + key notifikasi + posted\_at + teks) untuk dedup, supaya dua pembayaran bernominal sama tidak dianggap duplikat |
@@ -142,7 +144,7 @@ Sepuluh tabel PostgreSQL; `transactions` dan `payment_events` adalah inti, dihub
 | webhook\_deliveries | id, transaction\_id, attempt, status\_code, response\_body, next\_retry\_at | Log dan jadwal retry |
 | audit\_logs | id, user\_id, action, target, detail, created\_at | Jejak aksi owner |
 
-Redis menyimpan kunci kode unik yang sedang dipakai (TTL sama dengan masa berlaku transaksi) dan antrian webhook. Nonce request device juga disimpan di Redis dengan TTL selama jendela timestamp, untuk menolak replay.
+Kode unik dikunci dengan advisory lock PostgreSQL per QRIS dan kolom code\_locked\_until (masa berlaku + masa tenggang). Antrian webhook disimpan di webhook\_deliveries, dicatat di transaksi database yang sama dengan perubahan status. Nonce request device disimpan di tabel device\_nonces dan token pairing di device\_pairing\_tokens. Tabel users dibuat di Tahap 3 bersama login owner.
 
 ## API dan kontrak device
 
@@ -152,7 +154,7 @@ Dua kelompok endpoint: API publik untuk proyek klien (autentikasi API key) dan A
 
 | Method | Endpoint | Fungsi |
 | --- | --- | --- |
-| POST | /v1/transactions | Buat transaksi: amount, merchant\_ref; opsional expiry\_min, return\_url (tujuan redirect setelah lunas), dan metadata (dikembalikan apa adanya di webhook); header Idempotency-Key |
+| POST | /v1/transactions | Buat transaksi: amount, merchant\_ref; opsional expiry\_min, qris\_source\_id (bila kosong, pakai QRIS default proyek), return\_url (tujuan redirect setelah lunas), dan metadata (dikembalikan apa adanya di webhook); header Idempotency-Key |
 | GET | /v1/transactions/{id} | Cek status dan detail transaksi |
 | POST | /v1/transactions/{id}/cancel | Batalkan transaksi yang masih PENDING |
 | GET | /pay/{id} | Halaman checkout untuk pembeli (publik) |
@@ -186,7 +188,7 @@ Risiko terbesar ada di HP listener sebagai satu-satunya sumber konfirmasi; sebag
 | --- | --- | --- |
 | Format notifikasi berubah setelah update app | Pembayaran tidak terbaca | Simpan teks mentah, parser di server, alarm UNPARSED, matikan auto-update, pantau versi app |
 | HP mati, offline, atau listener dimatikan Android | Konfirmasi tertunda | Heartbeat + alarm, foreground service, rebind otomatis, scan notifikasi aktif |
-| Dua transaksi dengan nominal akhir sama | Salah cocok | Kode unik dikunci di Redis, index unik di database, jendela waktu matching |
+| Dua transaksi dengan nominal akhir sama | Salah cocok | Kode unik dikunci per QRIS (advisory lock PostgreSQL), index unik di database, jendela waktu matching |
 | Pembeli mengubah nominal sebelum bayar | Nominal tidak cocok | Tampilkan nominal unik dengan jelas, konfirmasi manual oleh owner (tombol "Saya sudah bayar" menyusul di Fase 2) |
 | Pembeli membayar setelah expired | Uang masuk tanpa order aktif | Status late\_paid, webhook khusus, keputusan di tangan owner |
 | Nominal masuk tidak sama dengan tagihan (kurang/lebih bayar) | Event tidak cocok ke transaksi mana pun | Status event UNMATCHED, alarm Telegram, owner mencocokkan manual dari log mutasi |
@@ -196,7 +198,15 @@ Risiko terbesar ada di HP listener sebagai satu-satunya sumber konfirmasi; sebag
 
 ## Roadmap dan metrik sukses
 
-> _Diagram (roadmap · 4 tahap, 3 gerbang) ada di dokumen asli._
+Empat tahap; setiap gerbang harus lolos sebelum lanjut:
+
+1. **Core QRIS**: konversi statis ke dinamis, CRC16, generate QR, uji scan e-wallet.
+   Gerbang: QR terbaca di semua e-wallet uji.
+2. **MVP otomatis**: API transaksi, app listener, parser dan pencocokan, webhook, halaman checkout.
+   Gerbang: transaksi uji lunas otomatis, tanpa salah cocok.
+3. **Produksi**: sambungkan proyek pertama, backup, alarm Telegram, dashboard dasar.
+   Gerbang: seminggu di produksi tanpa pembayaran hilang.
+4. **Penyempurnaan**: fitur Fase 2 (rekonsiliasi, sandbox, docs API, statistik, dll.).
 
 Tahap 1 sampai 3 menghasilkan semua fitur berlabel MVP; tahap 4 mengerjakan fitur berlabel Fase 2. Tanggal belum ditetapkan.
 
