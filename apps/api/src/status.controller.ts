@@ -1,8 +1,10 @@
+import { Throttle } from '@nestjs/throttler';
 import { Controller, Get, UseGuards } from '@nestjs/common';
 import { DevicesService } from './devices/devices.service';
 import { ApiKeyGuard } from './projects/api-key.guard';
 
 /** Status sistem untuk proyek klien: apakah konfirmasi otomatis sedang berjalan. */
+@Throttle({ default: { limit: 600, ttl: 60_000 } })
 @Controller('v1/status')
 @UseGuards(ApiKeyGuard)
 export class StatusController {

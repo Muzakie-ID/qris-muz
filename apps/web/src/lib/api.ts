@@ -1,8 +1,12 @@
 /**
  * Klien backend untuk kode yang berjalan di server Next.js (server component, server action).
- * ADMIN_TOKEN hanya dibaca di sini dan tidak pernah dikirim ke browser.
+ * Rute admin memakai token sesi owner dari cookie httpOnly; sesi yang ditolak backend
+ * diarahkan ke halaman login.
  */
+import { cookies, headers } from "next/headers";
+import { redirect } from "next/navigation";
 import { cache } from "react";
+import { SESSION_COOKIE, looksLikeSession } from "./session";
 import type { TransactionStatus } from "./types";
 
 export class ApiError extends Error {
@@ -18,25 +22,50 @@ function apiUrl(): string {
   return (process.env.API_URL ?? "http://localhost:3001").replace(/\/+$/, "");
 }
 
-/** Alamat API yang dibuka langsung oleh browser (SSE, gambar QR). */
+/**
+ * Alamat API yang dibuka langsung oleh browser (SSE, gambar QR). Dibaca saat runtime di server
+ * (bukan NEXT_PUBLIC_*, yang dibekukan saat build), jadi satu image Docker bisa dipakai di domain mana pun.
+ */
 export function publicApiUrl(): string {
-  return (process.env.NEXT_PUBLIC_API_URL ?? process.env.API_URL ?? "http://localhost:3001").replace(/\/+$/, "");
+  return (process.env.PUBLIC_API_URL ?? process.env.NEXT_PUBLIC_API_URL ?? process.env.API_URL ?? "http://localhost:3001").replace(
+    /\/+$/,
+    "",
+  );
 }
 
-async function request<T>(path: string, init: RequestInit & { admin?: boolean } = {}): Promise<T> {
-  const headers = new Headers(init.headers);
-  if (init.admin) {
-    const token = process.env.ADMIN_TOKEN;
-    if (!token) throw new ApiError(500, "ADMIN_TOKEN belum disetel di web.");
-    headers.set("Authorization", `Bearer ${token}`);
+/**
+ * IP asli pengunjung, dari X-Forwarded-For yang dipasang Caddy (entri terakhir = alamat yang
+ * dilihat Caddy). Diteruskan ke backend agar rate limit dan log login memakai IP pengunjung,
+ * bukan IP server web.
+ */
+async function clientIp(): Promise<string | null> {
+  try {
+    const h = await headers();
+    const xff = h.get("x-forwarded-for");
+    return xff?.split(",").pop()?.trim() || h.get("x-real-ip");
+  } catch {
+    return null; // di luar request (mis. saat build)
   }
-  if (init.body) headers.set("Content-Type", "application/json");
+}
+
+async function request<T>(path: string, init: RequestInit & { admin?: boolean; token?: string } = {}): Promise<T> {
+  const h = new Headers(init.headers);
+  const token = init.token ?? (init.admin ? (await cookies()).get(SESSION_COOKIE)?.value : undefined);
+  if (init.admin && !looksLikeSession(token)) redirect("/login");
+  if (token) h.set("Authorization", `Bearer ${token}`);
+  if (init.body) h.set("Content-Type", "application/json");
+  const ip = await clientIp();
+  if (ip) h.set("X-Forwarded-For", ip);
+  const ua = (await headers().catch(() => null))?.get("user-agent");
+  if (ua) h.set("User-Agent", ua);
   let res: Response;
   try {
-    res = await fetch(apiUrl() + path, { ...init, headers, cache: "no-store" });
+    res = await fetch(apiUrl() + path, { ...init, headers: h, cache: "no-store" });
   } catch (e) {
     throw new ApiError(503, `Backend tidak bisa dihubungi (${(e as Error).message}).`);
   }
+  // Sesi kedaluwarsa atau dicabut: kembali ke login.
+  if (res.status === 401 && init.admin) redirect("/login?expired=1");
   if (!res.ok) {
     let message = `HTTP ${res.status}`;
     try {
@@ -67,6 +96,8 @@ function query(params: Record<string, string | number | undefined>): string {
 }
 
 const id = (v: string) => encodeURIComponent(v);
+const put = <T>(path: string, body: unknown) =>
+  request<T>(path, { method: "PUT", admin: true, body: JSON.stringify(body) });
 
 // --- Checkout (publik) ---
 
@@ -368,3 +399,108 @@ export interface PaymentEvent {
 export const listPaymentEvents = (params: { parse_status?: ParseStatus; match_status?: MatchStatus; page?: number }) =>
   request<Paged<PaymentEvent>>(`/admin/payment-events${query(params)}`, { admin: true });
 export const reprocessEvents = () => post<{ processed: number; matched: number }>("/admin/events/reprocess");
+
+// --- Login & akun owner ---
+
+export type LoginResponse =
+  | { status: "ok"; token: string; expires_at: string }
+  | { status: "totp_required"; challenge: string };
+
+export const apiLogin = (email: string, password: string) =>
+  request<LoginResponse>("/auth/login", { method: "POST", body: JSON.stringify({ email, password }) });
+export const apiLoginTotp = (challenge: string, code: string) =>
+  request<LoginResponse>("/auth/login/totp", { method: "POST", body: JSON.stringify({ challenge, code }) });
+export const apiLogout = (token: string) => request<void>("/admin/account/logout", { method: "POST", token });
+
+export interface OwnerSessionInfo {
+  id: string;
+  current: boolean;
+  ip: string | null;
+  user_agent: string | null;
+  created_at: string;
+  last_seen_at: string;
+  expires_at: string;
+}
+
+export interface Account {
+  id: string;
+  email: string;
+  totp_enabled: boolean;
+  totp_enabled_at: string | null;
+  session_id: string;
+  sessions: OwnerSessionInfo[];
+}
+
+/** Satu kali per request walau dipanggil layout dan halaman sekaligus. */
+export const getAccount = cache(() => request<Account>("/admin/account", { admin: true }));
+export const changePassword = (current_password: string, new_password: string) =>
+  post<void>("/admin/account/password", { current_password, new_password });
+export const totpSetup = () => post<{ secret: string; otpauth_uri: string }>("/admin/account/totp/setup");
+export const totpEnable = (code: string) => post<void>("/admin/account/totp/enable", { code });
+export const totpDisable = (password: string, code: string) => post<void>("/admin/account/totp/disable", { password, code });
+export const revokeOwnerSession = (sessionId: string) => post<void>(`/admin/account/sessions/${id(sessionId)}/revoke`);
+
+// --- Pengaturan: Telegram, notifikasi, backup ---
+
+export const NOTIFY_CATEGORIES = [
+  "payment",
+  "late_payment",
+  "listener",
+  "unparsed",
+  "unmatched",
+  "app_version",
+  "webhook_failed",
+  "backup",
+  "security",
+] as const;
+export type NotifyCategory = (typeof NOTIFY_CATEGORIES)[number];
+
+export interface TelegramSettings {
+  enabled: boolean;
+  configured: boolean;
+  bot_token_hint: string | null;
+  chat_id: string | null;
+  categories: Record<NotifyCategory, boolean>;
+}
+
+export const getTelegram = () => request<TelegramSettings>("/admin/settings/telegram", { admin: true });
+export const updateTelegram = (input: {
+  enabled?: boolean;
+  bot_token?: string | null;
+  chat_id?: string | null;
+  categories?: Partial<Record<NotifyCategory, boolean>>;
+}) => put<TelegramSettings>("/admin/settings/telegram", input);
+export const testTelegram = () => post<void>("/admin/settings/telegram/test");
+
+export interface NotificationLog {
+  id: string;
+  category: NotifyCategory;
+  text: string;
+  status: "PENDING" | "SENT" | "FAILED";
+  attempt: number;
+  last_error: string | null;
+  sent_at: string | null;
+  created_at: string;
+}
+
+export const listNotifications = (page = 1, perPage = 10) =>
+  request<{ items: NotificationLog[]; total: number }>(`/admin/notifications${query({ page, per_page: perPage })}`, {
+    admin: true,
+  });
+
+export interface BackupStatus {
+  max_age_hours: number;
+  last_ok_at: string | null;
+  runs: {
+    id: string;
+    kind: "backup" | "restore_test";
+    ok: boolean;
+    file: string | null;
+    size_bytes: number | null;
+    detail: string | null;
+    started_at: string | null;
+    finished_at: string;
+  }[];
+}
+
+export const getBackups = () => request<BackupStatus>("/admin/backups", { admin: true });

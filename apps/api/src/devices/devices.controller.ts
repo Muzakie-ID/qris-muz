@@ -1,3 +1,4 @@
+import { SkipThrottle } from '@nestjs/throttler';
 import {
   Body,
   Controller,
@@ -14,6 +15,7 @@ import { DevicesService, type Device } from './devices.service';
 type Ctx = { device: Device; timestamp: number };
 
 /** API untuk HP listener. Semua kecuali register wajib ditandatangani HMAC. */
+@SkipThrottle()
 @Controller('device')
 export class DevicesController {
   constructor(

@@ -22,13 +22,15 @@ import { cn } from "@/lib/cn";
 interface SidebarProps {
   unreadEvents: number;
   listenerOnline: boolean;
+  ownerEmail: string | null;
+  totpEnabled: boolean;
 }
 
 function isActive(pathname: string, href: string) {
   return href === "/" ? pathname === "/" : pathname.startsWith(href);
 }
 
-export function Sidebar({ unreadEvents, listenerOnline }: SidebarProps) {
+export function Sidebar({ unreadEvents, listenerOnline, ownerEmail, totpEnabled }: SidebarProps) {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -147,16 +149,27 @@ export function Sidebar({ unreadEvents, listenerOnline }: SidebarProps) {
 
       <div className="mt-auto flex flex-col gap-0.5 rounded-[14px] border border-line bg-surface p-2">
         <div className={cn("flex items-center gap-2.5 p-1.5", collapsed && "lg:justify-center lg:p-0")}>
-          <span className="flex size-9 shrink-0 items-center justify-center rounded-[10px] bg-ink font-semibold text-white">M</span>
-          <span className={cn("flex flex-col leading-tight", collapsed && "lg:hidden")}>
-            <span className="font-medium">Muzakie</span>
-            <span className="text-xs text-faint">Owner</span>
+          <span className="flex size-9 shrink-0 items-center justify-center rounded-[10px] bg-ink font-semibold text-white">
+            {(ownerEmail ?? "O").charAt(0).toUpperCase()}
+          </span>
+          <span className={cn("flex min-w-0 flex-col leading-tight", collapsed && "lg:hidden")}>
+            <span className="truncate font-medium" title={ownerEmail ?? undefined}>
+              {ownerEmail ?? "Owner"}
+            </span>
+            <span className={cn("text-xs", totpEnabled ? "text-faint" : "text-warn")}>
+              {totpEnabled ? "Owner · 2FA aktif" : "Owner · 2FA mati"}
+            </span>
           </span>
         </div>
         <Link
           href="/pengaturan"
           title={collapsed ? "Pengaturan" : undefined}
-          className={cn("flex h-10 items-center gap-2.5 rounded-lg px-2 text-ink-2 hover:bg-subtle", collapsed && "lg:justify-center lg:px-0")}
+          aria-current={isActive(pathname, "/pengaturan") ? "page" : undefined}
+          className={cn(
+            "flex h-10 items-center gap-2.5 rounded-lg px-2 text-ink-2 hover:bg-subtle",
+            isActive(pathname, "/pengaturan") && "bg-subtle font-medium text-ink",
+            collapsed && "lg:justify-center lg:px-0",
+          )}
         >
           <Settings className="size-[18px]" strokeWidth={1.75} aria-hidden />
           <span className={cn(collapsed && "lg:sr-only")}>Pengaturan</span>

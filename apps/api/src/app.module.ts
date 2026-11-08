@@ -1,11 +1,16 @@
 import { Module } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
+import { ConfigModule, ConfigService } from '@nestjs/config';
+import { APP_GUARD } from '@nestjs/core';
+import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { AdminController } from './admin/admin.controller';
-import { AdminGuard } from './admin/admin.guard';
+import { AdminGuard, OwnerGuard } from './admin/admin.guard';
+import { AlertsModule } from './alerts/alerts.module';
+import { AccountController, AuthController } from './auth/auth.controller';
+import { AuthService } from './auth/auth.service';
 import { DashboardService } from './admin/dashboard.service';
 import { CheckoutController } from './checkout/checkout.controller';
 import { CommonModule } from './common/common.module';
-import { validateEnv } from './config/env';
+import { validateEnv, type Env } from './config/env';
 import { DbModule } from './db/db.module';
 import { DeviceSignatureGuard } from './devices/device-signature.guard';
 import { DevicesController } from './devices/devices.controller';
@@ -23,6 +28,20 @@ import { WebhooksModule } from './webhooks/webhooks.module';
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true, validate: validateEnv }),
+    ThrottlerModule.forRootAsync({
+      inject: [ConfigService],
+      useFactory: (config: ConfigService<Env, true>) => ({
+        throttlers: [
+          {
+            ttl: 60_000,
+            limit: config.get('RATE_LIMIT_PER_MIN', { infer: true }),
+          },
+        ],
+        skipIf: () => !config.get('RATE_LIMIT_ENABLED', { infer: true }),
+        errorMessage: 'Terlalu banyak request. Coba lagi sebentar lagi.',
+      }),
+    }),
+    AlertsModule,
     DbModule,
     CommonModule,
     QrisModule,
@@ -36,6 +55,8 @@ import { WebhooksModule } from './webhooks/webhooks.module';
     DevicesController,
     CheckoutController,
     AdminController,
+    AuthController,
+    AccountController,
   ],
   providers: [
     TransactionsService,
@@ -44,6 +65,9 @@ import { WebhooksModule } from './webhooks/webhooks.module';
     DevicesService,
     DeviceSignatureGuard,
     AdminGuard,
+    OwnerGuard,
+    AuthService,
+    { provide: APP_GUARD, useClass: ThrottlerGuard },
     DashboardService,
   ],
 })

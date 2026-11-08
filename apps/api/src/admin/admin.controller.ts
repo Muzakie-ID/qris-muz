@@ -1,3 +1,4 @@
+import { SkipThrottle } from '@nestjs/throttler';
 import {
   Body,
   Controller,
@@ -6,10 +7,13 @@ import {
   Param,
   Patch,
   Post,
+  Put,
   Query,
   UnprocessableEntityException,
   UseGuards,
 } from '@nestjs/common';
+import { AlertsService } from '../alerts/alerts.service';
+import { NotifierService } from '../alerts/notifier.service';
 import { AuditService } from '../common/audit.service';
 import { DeviceCommandDto, PairingTokenDto } from '../devices/devices.dto';
 import { DevicesService } from '../devices/devices.service';
@@ -33,6 +37,8 @@ import {
   ListPaymentEventsQueryDto,
   ListTransactionsQueryDto,
   ListWebhookDeliveriesQueryDto,
+  PageQueryDto,
+  UpdateTelegramDto,
   TestParserDto,
   TestTransactionDto,
   UpdateParserDto,
@@ -79,6 +85,7 @@ function parserView(r: ParserRow) {
 const iso = (d: Date | null) => d?.toISOString() ?? null;
 
 /** Pengelolaan oleh owner. Nanti dipakai dashboard; sementara diakses dengan ADMIN_TOKEN. */
+@SkipThrottle()
 @Controller('admin')
 @UseGuards(AdminGuard)
 export class AdminController {
@@ -92,7 +99,44 @@ export class AdminController {
     private readonly audit: AuditService,
     private readonly dashboard: DashboardService,
     private readonly parsers: ParsersService,
+    private readonly notifier: NotifierService,
+    private readonly alerts: AlertsService,
   ) {}
+
+  // --- Pengaturan: Telegram & backup ---
+  @Get('settings/telegram')
+  telegram() {
+    return this.notifier.view();
+  }
+
+  /** bot_token hanya dikirim saat diganti; kosongkan (null) untuk menghapus. */
+  @Put('settings/telegram')
+  async updateTelegram(@Body() dto: UpdateTelegramDto) {
+    const r = await this.notifier.update(dto);
+    await this.audit.log('settings.telegram_updated', null, {
+      enabled: r.enabled,
+      chat_id: r.chat_id,
+      token_changed: dto.bot_token !== undefined,
+      categories: dto.categories,
+    });
+    return r;
+  }
+
+  @Post('settings/telegram/test')
+  @HttpCode(204)
+  testTelegram() {
+    return this.notifier.sendTest();
+  }
+
+  @Get('notifications')
+  listNotifications(@Query() q: PageQueryDto) {
+    return this.notifier.list(q.page ?? 1, q.per_page ?? 20);
+  }
+
+  @Get('backups')
+  listBackups() {
+    return this.alerts.listBackups();
+  }
 
   // --- Dashboard ---
   @Get('dashboard')

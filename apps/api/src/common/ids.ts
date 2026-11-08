@@ -13,4 +13,7 @@ export const newId = {
   delivery: () => `whd_${ulid()}`,
   webhookEvent: () => `whe_${ulid()}`,
   audit: () => `aud_${ulid()}`,
+  user: () => `usr_${ulid()}`,
+  session: () => `ses_${ulid()}`,
+  notification: () => `ntf_${ulid()}`,
 };

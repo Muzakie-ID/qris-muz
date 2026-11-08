@@ -6,18 +6,38 @@ Backend payment gateway QRIS dinamis. PostgreSQL saja, tanpa Redis.
 - **Tahap 2, MVP otomatis**: API transaksi dengan kode unik per QRIS, API device untuk HP listener,
   parser dan pencocokan, webhook bertanda tangan dengan retry, kedaluwarsa otomatis, halaman checkout
   realtime (SSE), dan endpoint admin.
+- **Tahap 3, Produksi**: login owner (argon2id + 2FA TOTP + sesi yang bisa dicabut), alarm Telegram,
+  rate limiting, catatan backup, `owner-cli`, dan `Dockerfile` (lihat `deploy/`).
 
 ## Menjalankan
 
 ```bash
 cd apps/api
 npm install
-cp .env.example .env        # isi DATABASE_URL, APP_ENCRYPTION_KEY, ADMIN_TOKEN
+cp .env.example .env        # isi DATABASE_URL dan APP_ENCRYPTION_KEY
 npm run db:migrate
+npm run owner -- create anda@contoh.id   # akun owner dashboard
 npm run start:dev           # http://localhost:3001
 ```
 
-## Menyiapkan pertama kali (pakai ADMIN_TOKEN)
+## Akun owner (`owner-cli`)
+
+Dijalankan di server, bukan dari dashboard. Password ditanyakan tanpa ditampilkan (atau dari
+`OWNER_PASSWORD` untuk otomasi), minimal 10 karakter.
+
+| Perintah | Isi |
+|---|---|
+| `npm run owner -- create <email>` | Owner pertama (hanya bila belum ada) |
+| `npm run owner -- reset-password <email>` | Lupa password; membuka kunci akun |
+| `npm run owner -- disable-2fa <email>` | HP authenticator hilang |
+| `npm run owner -- list` | Daftar owner dan status 2FA |
+
+Di Docker: `docker compose exec api node dist/scripts/owner-cli.js <perintah>`. Reset password dan
+mematikan 2FA juga mengeluarkan semua sesi.
+
+## Menyiapkan lewat skrip (opsional, pakai ADMIN_TOKEN)
+
+Cara biasa adalah lewat dashboard. Untuk otomasi, isi `ADMIN_TOKEN` lalu:
 
 ```bash
 H='Authorization: Bearer <ADMIN_TOKEN>'; J='Content-Type: application/json'
@@ -87,7 +107,24 @@ Semua kecuali register wajib header `X-Device-Id`, `X-Timestamp` (ms), `X-Nonce`
 `GET /public/checkout/:id`, `GET /public/checkout/:id/qr.png` (hanya saat masih bisa dibayar),
 dan `GET /public/checkout/:id/events` (Server-Sent Events; status dikirim begitu berubah).
 
-## Admin (header `Authorization: Bearer <ADMIN_TOKEN>`)
+## Login owner
+
+| Method | Rute | Isi |
+|---|---|---|
+| POST | `/auth/login` | `{ email, password }` → `{ status: "ok", token, expires_at }` atau `{ status: "totp_required", challenge }` (berlaku 5 menit). 10 request/menit per IP; akun dikunci 15 menit setelah 5 kali salah |
+| POST | `/auth/login/totp` | `{ challenge, code }` → `{ status: "ok", token, expires_at }`. Kode yang sudah dipakai ditolak |
+
+Token sesi (`qms_…`) dikirim sebagai `Authorization: Bearer`. Sesi berakhir setelah 12 jam tidak
+dipakai, paling lama 30 hari. Di produksi, `/auth` dan `/admin` hanya bisa dipanggil server web
+lewat jaringan internal (Caddy menutupnya dari internet).
+
+Akun yang sedang login (hanya token sesi, bukan `ADMIN_TOKEN`): `GET /admin/account` (email, status
+2FA, sesi aktif), `POST /admin/account/logout`, `POST /admin/account/password`
+`{ current_password, new_password }`, `POST /admin/account/totp/setup` → `{ secret, otpauth_uri }`,
+`POST /admin/account/totp/enable` `{ code }`, `POST /admin/account/totp/disable`
+`{ password, code }`, `POST /admin/account/sessions/:id/revoke`.
+
+## Admin (header `Authorization: Bearer <token sesi owner atau ADMIN_TOKEN>`)
 
 QRIS (`/admin/qris-sources`), proyek dan API key (`/admin/projects`, `/admin/api-keys/:id/revoke`),
 perangkat (`/admin/devices`, pairing, cabut), konfirmasi manual (`POST /admin/transactions/:id/confirm`
@@ -109,9 +146,22 @@ Untuk dashboard web:
 | POST | `/admin/parsers/test` | `{ text, package_name?, title?, pattern? }` → `{ matched, amount, parser_id, auto_match }`. Tanpa `pattern`, semua parser aktif dipakai seperti di produksi |
 | GET | `/admin/webhook-deliveries` | `?status=PENDING\|DELIVERED\|FAILED&page=&per_page=`, dengan nama proyek, URL webhook, ref order, dan `counts` per status |
 | POST | `/admin/webhook-deliveries/:id/retry` | Kirim ulang segera (404 bila tidak ada) |
+| GET | `/admin/settings/telegram` | `{ enabled, configured, bot_token_hint, chat_id, categories }`. Token bot tidak pernah dikembalikan |
+| PUT | `/admin/settings/telegram` | `{ enabled?, bot_token?, chat_id?, categories? }`. Kategori: `payment`, `late_payment`, `listener`, `unparsed`, `unmatched`, `app_version`, `webhook_failed`, `backup`, `security` |
+| POST | `/admin/settings/telegram/test` | Kirim pesan uji langsung; error dari Telegram diteruskan |
+| GET | `/admin/notifications` | Log notifikasi Telegram (`?page=&per_page=`) |
+| GET | `/admin/backups` | 20 catatan backup/uji restore terakhir dan waktu backup sukses terakhir |
 | GET | `/admin/payment-events` | Mutasi masuk berhalaman: `?parse_status=&match_status=&page=&per_page=`, dengan nama device, label QRIS, ref order, dan `counts` per status cocok plus `UNPARSED` |
 
 ## Cara kerja penting
+
+- **Alarm Telegram**: pesan dicatat dulu di tabel `notifications`, lalu dikirim tugas berkala dengan
+  5 kali coba ulang. Pemicu: pembayaran lunas/telat, listener offline lebih dari
+  `LISTENER_OFFLINE_AFTER_SEC` (sekali per kejadian) dan saat online lagi, notifikasi tak terbaca
+  atau tak cocok, versi aplikasi sumber berubah, webhook gagal permanen, backup gagal atau terlambat,
+  login dan penguncian akun.
+- **Backup**: skrip di container `backup` mencatat hasilnya ke tabel `backup_runs`; API memeriksa
+  tabel itu tiap 5 menit.
 
 - **Kode unik**: 1–999 dipilih acak per QRIS, dengan kunci per QRIS di PostgreSQL (advisory lock) agar
   tidak bentrok. Nominal akhir tetap dikunci selama masa tenggang (`UNIQUE_CODE_GRACE_HOURS`) setelah

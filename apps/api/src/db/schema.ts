@@ -119,6 +119,8 @@ export const devices = pgTable('devices', {
   lastCrash: text('last_crash'),
   lastCrashAt: ts('last_crash_at'),
   /** Perintah dari dashboard yang diambil listener lewat heartbeat berikutnya. */
+  /** Kapan alarm offline terakhir dikirim; dikosongkan lagi saat device kembali online. */
+  offlineAlertedAt: ts('offline_alerted_at'),
   pendingCommands: jsonb('pending_commands')
     .$type<DeviceCommand[]>()
     .notNull()
@@ -269,4 +271,83 @@ export const auditLogs = pgTable('audit_logs', {
   target: text('target'),
   detail: jsonb('detail'),
   createdAt: createdAt(),
+});
+
+/** Akun owner dashboard. Password argon2id; secret TOTP terenkripsi. */
+export const users = pgTable('users', {
+  id: text('id').primaryKey(),
+  email: text('email').notNull().unique(),
+  passwordHash: text('password_hash').notNull(),
+  /** Secret TOTP aktif (terenkripsi). Null = 2FA belum aktif. */
+  totpSecretEnc: text('totp_secret_enc'),
+  /** Secret yang sedang didaftarkan, menunggu kode pertama. */
+  totpPendingEnc: text('totp_pending_enc'),
+  totpEnabledAt: ts('totp_enabled_at'),
+  /** Langkah waktu TOTP terakhir yang dipakai, agar kode tidak bisa dipakai dua kali. */
+  totpLastStep: bigint('totp_last_step', { mode: 'number' }),
+  failedLogins: integer('failed_logins').notNull().default(0),
+  lockedUntil: ts('locked_until'),
+  createdAt: createdAt(),
+  updatedAt: ts('updated_at').notNull().defaultNow(),
+});
+
+export const ownerSessions = pgTable(
+  'owner_sessions',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id),
+    tokenHash: text('token_hash').notNull().unique(),
+    ip: text('ip'),
+    userAgent: text('user_agent'),
+    createdAt: createdAt(),
+    lastSeenAt: ts('last_seen_at').notNull().defaultNow(),
+    expiresAt: ts('expires_at').notNull(),
+    revokedAt: ts('revoked_at'),
+  },
+  (t) => [index('owner_sessions_user_idx').on(t.userId)],
+);
+
+/** Pengaturan yang bisa diubah dari dashboard (mis. Telegram). */
+export const settings = pgTable('settings', {
+  key: text('key').primaryKey(),
+  value: jsonb('value').notNull(),
+  updatedAt: ts('updated_at').notNull().defaultNow(),
+});
+
+export const notificationStatus = pgEnum('notification_status', [
+  'PENDING',
+  'SENT',
+  'FAILED',
+]);
+
+/** Antrian pesan Telegram ke owner, dengan percobaan ulang. */
+export const notifications = pgTable(
+  'notifications',
+  {
+    id: text('id').primaryKey(),
+    category: text('category').notNull(),
+    text: text('text').notNull(),
+    status: notificationStatus('status').notNull().default('PENDING'),
+    attempt: integer('attempt').notNull().default(0),
+    lastError: text('last_error'),
+    nextRetryAt: ts('next_retry_at').notNull().defaultNow(),
+    sentAt: ts('sent_at'),
+    createdAt: createdAt(),
+  },
+  (t) => [index('notifications_due_idx').on(t.status, t.nextRetryAt)],
+);
+
+/** Catatan dari skrip backup/uji restore di server, untuk dashboard dan alarm. */
+export const backupRuns = pgTable('backup_runs', {
+  id: text('id').primaryKey(),
+  /** 'backup' atau 'restore_test'. */
+  kind: text('kind').notNull(),
+  ok: boolean('ok').notNull(),
+  file: text('file'),
+  sizeBytes: bigint('size_bytes', { mode: 'number' }),
+  detail: text('detail'),
+  startedAt: ts('started_at'),
+  finishedAt: ts('finished_at').notNull().defaultNow(),
 });

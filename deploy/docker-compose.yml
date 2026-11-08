@@ -1,0 +1,95 @@
+# qrismuz di satu VPS: PostgreSQL, API, web, Caddy (HTTPS otomatis), dan backup harian.
+# Jalankan dari folder deploy/:  docker compose up -d --build
+# Panduan lengkap: deploy/README.md
+
+name: qrismuz
+
+x-restart: &restart
+  restart: unless-stopped
+  logging:
+    driver: json-file
+    options: { max-size: "10m", max-file: "5" }
+
+services:
+  db:
+    <<: *restart
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: qrismuz
+      POSTGRES_USER: qrismuz
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?isi POSTGRES_PASSWORD di .env}
+      TZ: Asia/Jakarta
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U qrismuz -d qrismuz"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  api:
+    <<: *restart
+    build: ../apps/api
+    depends_on:
+      db: { condition: service_healthy }
+    environment:
+      DATABASE_URL: postgres://qrismuz:${POSTGRES_PASSWORD}@db:5432/qrismuz
+      APP_ENCRYPTION_KEY: ${APP_ENCRYPTION_KEY:?isi APP_ENCRYPTION_KEY di .env}
+      PUBLIC_API_URL: https://${API_DOMAIN:?isi API_DOMAIN di .env}
+      CHECKOUT_BASE_URL: https://${WEB_DOMAIN:?isi WEB_DOMAIN di .env}
+      ADMIN_TOKEN: ${ADMIN_TOKEN:-}
+      QRIS_TOOLS_ENABLED: "false"
+      QRIS_MAX_AMOUNT: ${QRIS_MAX_AMOUNT:-10000000}
+      UNIQUE_CODE_GRACE_HOURS: ${UNIQUE_CODE_GRACE_HOURS:-24}
+      LISTENER_OFFLINE_AFTER_SEC: ${LISTENER_OFFLINE_AFTER_SEC:-300}
+      RATE_LIMIT_PER_MIN: ${RATE_LIMIT_PER_MIN:-120}
+      BACKUP_MAX_AGE_HOURS: ${BACKUP_MAX_AGE_HOURS:-26}
+      TZ: Asia/Jakarta
+
+  web:
+    <<: *restart
+    build: ../apps/web
+    depends_on: [api]
+    environment:
+      API_URL: http://api:3001
+      PUBLIC_API_URL: https://${API_DOMAIN}
+      TZ: Asia/Jakarta
+
+  caddy:
+    <<: *restart
+    image: caddy:2-alpine
+    depends_on: [api, web]
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      API_DOMAIN: ${API_DOMAIN}
+      WEB_DOMAIN: ${WEB_DOMAIN}
+      ACME_EMAIL: ${ACME_EMAIL:?isi ACME_EMAIL di .env}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+  backup:
+    <<: *restart
+    build: ./backup
+    depends_on:
+      db: { condition: service_healthy }
+    environment:
+      DATABASE_URL: postgres://qrismuz:${POSTGRES_PASSWORD}@db:5432/qrismuz
+      RCLONE_REMOTE: ${RCLONE_REMOTE:-}
+      BACKUP_CRON: ${BACKUP_CRON:-30 2 * * *}
+      RESTORE_TEST_CRON: ${RESTORE_TEST_CRON:-15 4 * * 0}
+      REMOTE_KEEP_DAYS: ${REMOTE_KEEP_DAYS:-30}
+      LOCAL_KEEP_DAYS: ${LOCAL_KEEP_DAYS:-7}
+      TZ: Asia/Jakarta
+    volumes:
+      - ./backups:/backups
+      - ./rclone:/config/rclone
+
+volumes:
+  pgdata:
+  caddy_data:
+  caddy_config:

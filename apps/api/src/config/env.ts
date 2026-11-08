@@ -12,7 +12,7 @@ export interface Env {
   PUBLIC_API_URL: string;
   /** Alamat web app (Next.js), dipakai untuk checkout_url. */
   CHECKOUT_BASE_URL: string;
-  /** Token admin sementara sampai login owner dibuat di Tahap 3. Kosong = endpoint admin mati. */
+  /** Token untuk otomasi/skrip ke endpoint admin (opsional). Dashboard memakai login owner. */
   ADMIN_TOKEN: string | null;
   /** QRIS statis untuk alat uji Tahap 1 (opsional). */
   QRIS_STATIC_PAYLOAD: string | null;
@@ -28,6 +28,18 @@ export interface Env {
   LISTENER_OFFLINE_AFTER_SEC: number;
   /** Menjalankan tugas berkala (kedaluwarsa, kirim webhook). Dimatikan di test. */
   JOBS_ENABLED: boolean;
+  /**
+   * Nilai `trust proxy` Express, agar IP pembeli/owner terbaca benar di balik Caddy dan server web.
+   * Bawaan: alamat lokal dan jaringan privat (Docker).
+   */
+  TRUST_PROXY: string;
+  RATE_LIMIT_ENABLED: boolean;
+  /** Batas umum request per menit per IP untuk endpoint publik. */
+  RATE_LIMIT_PER_MIN: number;
+  /** Alamat Bot API Telegram; diganti hanya untuk pengujian. */
+  TELEGRAM_API_URL: string;
+  /** Alarm bila backup sukses terakhir lebih lama dari ini (jam). */
+  BACKUP_MAX_AGE_HOURS: number;
 }
 
 function text(raw: unknown): string {
@@ -128,5 +140,22 @@ export function validateEnv(config: Record<string, unknown>): Env {
       300,
     ),
     JOBS_ENABLED: toBool(config.JOBS_ENABLED, true),
+    TRUST_PROXY: text(config.TRUST_PROXY) || 'loopback, linklocal, uniquelocal',
+    RATE_LIMIT_ENABLED: toBool(config.RATE_LIMIT_ENABLED, true),
+    RATE_LIMIT_PER_MIN: toInt(
+      'RATE_LIMIT_PER_MIN',
+      config.RATE_LIMIT_PER_MIN,
+      120,
+    ),
+    TELEGRAM_API_URL: toUrl(
+      'TELEGRAM_API_URL',
+      config.TELEGRAM_API_URL,
+      'https://api.telegram.org',
+    ),
+    BACKUP_MAX_AGE_HOURS: toInt(
+      'BACKUP_MAX_AGE_HOURS',
+      config.BACKUP_MAX_AGE_HOURS,
+      26,
+    ),
   };
 }

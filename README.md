@@ -111,9 +111,13 @@ qris-muz/
 │   │   ├── src/webhooks/    Antrian dan pengiriman webhook
 │   │   ├── src/checkout/    Data halaman bayar + SSE
 │   │   ├── src/admin/       Endpoint pengelolaan owner
+│   │   ├── src/auth/        Login owner, sesi, 2FA (TOTP)
+│   │   ├── src/alerts/      Notifikasi Telegram dan alarm (listener, backup, webhook)
+│   │   ├── src/scripts/     owner-cli (buat owner, reset password, matikan 2FA)
 │   │   └── drizzle/         Migrasi SQL
 │   ├── web/          Dashboard + checkout  → apps/web/README.md
 │   └── listener/     Aplikasi Android      → apps/listener/README.md
+├── deploy/           Docker Compose, Caddy, backup → deploy/README.md
 └── docs/
     ├── PRD.md            Dokumen kebutuhan produk (gateway)
     └── PRD-listener.md   Dokumen kebutuhan aplikasi listener
@@ -124,13 +128,12 @@ qris-muz/
 | Tahap | Isi | Status |
 |---|---|---|
 | 1. Core QRIS | Konversi statis → dinamis, CRC16, gambar QR, alat uji | Selesai. Gerbang uji scan di e-wallet menunggu QRIS asli |
-| 2. MVP otomatis | API transaksi, multi-QRIS, API device, parser, pencocokan, webhook, checkout SSE, aplikasi listener, dashboard lengkap (Beranda, Transaksi, Mutasi, Proyek, Perangkat, QRIS, Parser, Log webhook) dan halaman bayar tersambung ke API | Selesai di kode, teruji otomatis. Uji pembayaran sungguhan menunggu deploy |
-| 3. Produksi | Deploy VPS, login owner + 2FA (sekarang password sementara), notifikasi Telegram, rate limiting, backup, halaman Pengaturan | Belum |
+| 2. MVP otomatis | API transaksi, multi-QRIS, API device, parser, pencocokan, webhook, checkout SSE, aplikasi listener, dashboard lengkap (Beranda, Transaksi, Mutasi, Proyek, Perangkat, QRIS, Parser, Log webhook) dan halaman bayar tersambung ke API | Selesai |
+| 3. Produksi | Docker Compose + Caddy (HTTPS), login owner + 2FA, sesi yang bisa dicabut, alarm Telegram, rate limiting, backup harian ke Google Drive + uji restore, halaman Pengaturan | Selesai di kode dan teruji di Docker. Menunggu deploy ke VPS dan gerbang "seminggu tanpa pembayaran hilang" |
 | 4. Penyempurnaan | Fitur Fase 2: rekonsiliasi, sandbox, statistik, HP cadangan, pengumuman suara, dll. | Belum |
 
-Semua halaman dashboard dan halaman bayar memakai data asli dari backend. Pengelolaan proyek, API
-key, HP listener, QRIS, parser, dan webhook bisa dilakukan dari dashboard; hanya halaman Pengaturan
-(akun owner, 2FA, Telegram, backup) yang masih menyusul.
+Semua halaman dashboard dan halaman bayar memakai data asli dari backend. Langkah deploy ke VPS
+ada di [deploy/README.md](deploy/README.md).
 
 ## Mulai cepat (lokal)
 
@@ -154,9 +157,9 @@ sudo -u postgres createdb -O qris qrismuz_test   # untuk e2e test
 cd apps/api
 npm install
 cp .env.example .env
-# Isi .env: APP_ENCRYPTION_KEY dan ADMIN_TOKEN, masing-masing dari:
-#   openssl rand -base64 32
+# Isi APP_ENCRYPTION_KEY: openssl rand -base64 32
 npm run db:migrate
+npm run owner -- create anda@contoh.id   # akun owner pertama, password ditanyakan
 npm run start:dev          # http://localhost:3001
 curl localhost:3001/health # {"status":"ok"}
 ```
@@ -167,8 +170,7 @@ curl localhost:3001/health # {"status":"ok"}
 cd apps/web
 npm install
 cp .env.example .env.local
-# Isi ADMIN_TOKEN (sama dengan backend), DASHBOARD_PASSWORD, dan SESSION_SECRET.
-npm run dev                # http://localhost:3000, login dengan DASHBOARD_PASSWORD
+npm run dev                # http://localhost:3000, login dengan akun owner
 ```
 
 Tombol **Buat transaksi uji** di dashboard membuat tagihan Rp1.000 dan membuka halaman bayarnya.
@@ -183,18 +185,20 @@ echo "sdk.dir=/path/ke/android-sdk" > local.properties
 
 ## Menyiapkan gateway pertama kali
 
-Lewat dashboard (masuk dengan `DASHBOARD_PASSWORD`):
+Lewat dashboard (masuk dengan akun owner):
 
-1. **QRIS** → Tambah QRIS: tempel teks hasil scan QRIS statis (diawali `000201`), beri label, isi
+1. **Pengaturan**: nyalakan 2FA dan notifikasi Telegram.
+2. **QRIS** → Tambah QRIS: tempel teks hasil scan QRIS statis (diawali `000201`), beri label, isi
    package aplikasi merchant bila sudah tahu.
-2. **Proyek & API key** → Proyek baru: isi URL webhook dan return URL. Salin **webhook secret** yang
+3. **Proyek & API key** → Proyek baru: isi URL webhook dan return URL. Salin **webhook secret** yang
    muncul (hanya ditampilkan sekali), lalu tekan **API key baru** dan salin key-nya.
-3. **Perangkat** → Tambah perangkat → Buat kode pairing, lalu di aplikasi listener tekan **Scan QR
+4. **Perangkat** → Tambah perangkat → Buat kode pairing, lalu di aplikasi listener tekan **Scan QR
    pairing**.
-4. Tekan **Buat transaksi uji** di Beranda, bayar Rp1.000-an itu, dan lihat statusnya berubah di
+5. Tekan **Buat transaksi uji** di Beranda, bayar Rp1.000-an itu, dan lihat statusnya berubah di
    **Mutasi masuk** dan **Transaksi**.
 
-Hal yang sama bisa dilakukan dengan endpoint admin dan `ADMIN_TOKEN`:
+Hal yang sama bisa dilakukan dari skrip dengan endpoint admin dan `ADMIN_TOKEN` (opsional; di
+produksi endpoint admin hanya bisa dipanggil dari dalam VPS):
 
 ```bash
 H="Authorization: Bearer $ADMIN_TOKEN"; J='Content-Type: application/json'
@@ -366,7 +370,7 @@ Variabel lingkungan backend (lihat [apps/api/.env.example](apps/api/.env.example
 |---|---|---|---|
 | `DATABASE_URL` | Ya | | `postgres://user:pass@host:5432/db` |
 | `APP_ENCRYPTION_KEY` | Ya | | 32 byte base64/hex. Jangan diganti setelah ada data |
-| `ADMIN_TOKEN` | Tidak | kosong | Minimal 24 karakter. Kosong = endpoint admin mati |
+| `ADMIN_TOKEN` | Tidak | kosong | Token otomasi untuk endpoint admin, minimal 24 karakter. Dashboard memakai login owner |
 | `PORT` | Tidak | `3001` | |
 | `PUBLIC_API_URL` | Tidak | `http://localhost:3001` | Untuk `qr_image_url` dan `pairing_uri` |
 | `CHECKOUT_BASE_URL` | Tidak | `http://localhost:3000` | Untuk `checkout_url` dan CORS |
@@ -377,6 +381,13 @@ Variabel lingkungan backend (lihat [apps/api/.env.example](apps/api/.env.example
 | `JOBS_ENABLED` | Tidak | `true` | Tugas berkala (kedaluwarsa, webhook) |
 | `QRIS_TOOLS_ENABLED` | Tidak | `false` | Alat uji QRIS Tahap 1 |
 | `QRIS_STATIC_PAYLOAD` | Tidak | kosong | QRIS untuk alat uji |
+| `TRUST_PROXY` | Tidak | `loopback, linklocal, uniquelocal` | Proxy yang dipercaya untuk IP asli (Caddy, server web) |
+| `RATE_LIMIT_ENABLED` | Tidak | `true` | |
+| `RATE_LIMIT_PER_MIN` | Tidak | `120` | Batas per IP untuk endpoint publik (login 10, API proyek 600) |
+| `BACKUP_MAX_AGE_HOURS` | Tidak | `26` | Alarm bila backup sukses terakhir lebih lama dari ini |
+| `TELEGRAM_API_URL` | Tidak | `https://api.telegram.org` | Hanya diganti untuk pengujian |
+
+Token bot dan chat ID Telegram diatur dari dashboard (**Pengaturan**), disimpan terenkripsi.
 
 ## Keterbatasan dan risiko
 
@@ -393,7 +404,7 @@ Variabel lingkungan backend (lihat [apps/api/.env.example](apps/api/.env.example
 
 ## Rencana berikutnya
 
-1. Deploy ke VPS (Docker Compose + Caddy untuk HTTPS) dan uji pembayaran sungguhan dari HP listener.
-2. Login owner dengan 2FA, menggantikan `ADMIN_TOKEN`.
-3. Notifikasi Telegram (pembayaran masuk, listener offline, notifikasi tak terbaca), rate limiting,
-   dan backup harian `pg_dump` ke Google Drive lewat rclone.
+1. Deploy ke VPS ([deploy/README.md](deploy/README.md)), uji pembayaran sungguhan dari HP
+   listener, dan jalankan seminggu untuk gerbang Tahap 3.
+2. Tahap 4 (fitur Fase 2): rekonsiliasi harian, sandbox, dokumentasi API, statistik dan ekspor CSV,
+   HP listener cadangan, pengumuman suara.
