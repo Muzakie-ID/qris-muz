@@ -27,6 +27,8 @@ export class CreateProjectDto {
   @IsOptional() @IsUrl(URL_OPTS) default_return_url?: string;
   @IsOptional() @IsString() default_qris_source_id?: string;
   @IsOptional() @IsInt() @Min(1) @Max(1440) default_expiry_min?: number;
+  @IsOptional() @IsInt() @Min(1) @Max(99_999) unique_code_min?: number;
+  @IsOptional() @IsInt() @Min(1) @Max(99_999) unique_code_max?: number;
 }
 
 export class UpdateProjectDto {
@@ -44,6 +46,8 @@ export class UpdateProjectDto {
   @IsString()
   default_qris_source_id?: string | null;
   @IsOptional() @IsInt() @Min(1) @Max(1440) default_expiry_min?: number;
+  @IsOptional() @IsInt() @Min(1) @Max(99_999) unique_code_min?: number;
+  @IsOptional() @IsInt() @Min(1) @Max(99_999) unique_code_max?: number;
 }
 
 export class CreateQrisSourceDto {

@@ -19,7 +19,8 @@ export default function DocsHome() {
             body: (
               <P>
                 Misalnya toko Anda memanggil <C>POST /v1/transactions</C> dengan nominal Rp50.000. qrismuz menambah kode unik
-                1–999, misalnya menjadi <strong>Rp50.087</strong>, dan membuat QR dinamis berisi nominal itu.
+                (bawaan 1–999, bisa diatur per proyek), misalnya menjadi <strong>Rp50.087</strong>, dan membuat QR dinamis berisi
+                nominal itu.
               </P>
             ),
           },
@@ -80,7 +81,7 @@ export default function DocsHome() {
         rows={[
           ["QRIS statis", "QR merchant dari DANA Bisnis/GoPay Merchant tanpa nominal. Dipakai sebagai bahan, tidak ditunjukkan langsung ke pembeli."],
           ["QR dinamis", "QR yang dibuat qrismuz dari QRIS statis, sudah berisi nominal akhir tagihan."],
-          ["Kode unik", "Tambahan Rp1–Rp999 di belakang nominal agar setiap tagihan aktif berbeda."],
+          ["Kode unik", "Tambahan di belakang nominal agar setiap tagihan aktif berbeda. Bawaan Rp1–Rp999; rentangnya diatur per proyek."],
           ["Nominal akhir (final_amount)", "Nominal yang harus dibayar pembeli: nominal + kode unik."],
           ["Proyek", "Aplikasi/website Anda yang memakai gateway. Punya API key dan URL webhook sendiri."],
           ["HP listener", "HP Android khusus yang login DANA Bisnis/GoPay Merchant dan menjalankan aplikasi qrismuz Listener."],

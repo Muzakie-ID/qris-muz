@@ -230,6 +230,8 @@ export interface Project {
   default_return_url: string | null;
   default_qris_source_id: string | null;
   default_expiry_min: number;
+  unique_code_min: number;
+  unique_code_max: number;
   created_at: string;
 }
 
@@ -247,6 +249,8 @@ export interface ProjectInput {
   default_return_url?: string | null;
   default_qris_source_id?: string | null;
   default_expiry_min?: number;
+  unique_code_min?: number;
+  unique_code_max?: number;
 }
 
 export const listProjects = () => request<Project[]>("/admin/projects", { admin: true });

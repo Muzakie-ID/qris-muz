@@ -64,6 +64,9 @@ export const projects = pgTable('projects', {
   defaultQrisSourceId: text('default_qris_source_id').references(
     () => qrisSources.id,
   ),
+  /** Rentang kode unik yang ditambahkan ke nominal tagihan proyek ini (inklusif). */
+  uniqueCodeMin: integer('unique_code_min').notNull().default(1),
+  uniqueCodeMax: integer('unique_code_max').notNull().default(999),
   createdAt: createdAt(),
 });
 

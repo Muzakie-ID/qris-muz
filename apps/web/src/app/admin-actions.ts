@@ -94,6 +94,14 @@ function fail(message: string): never {
 
 // --- Proyek & API key ---
 
+function codeRange(form: FormData) {
+  const min = int(form, "unique_code_min", "Kode unik terkecil");
+  const max = int(form, "unique_code_max", "Kode unik terbesar");
+  if (min !== undefined && max !== undefined && min > max)
+    throw new FormError("Kode unik terkecil harus lebih kecil dari yang terbesar.");
+  return { unique_code_min: min, unique_code_max: max };
+}
+
 export async function createProjectAction(_: ActionResult, form: FormData) {
   return run("/proyek", async () => {
     const p = await createProject({
@@ -102,6 +110,7 @@ export async function createProjectAction(_: ActionResult, form: FormData) {
       default_return_url: nullable(form, "default_return_url") ?? undefined,
       default_qris_source_id: nullable(form, "default_qris_source_id") ?? undefined,
       default_expiry_min: int(form, "default_expiry_min", "Masa berlaku"),
+      ...codeRange(form),
     });
     return {
       message: `Proyek ${p.name} dibuat. Buat API key di kartunya untuk mulai memakai API.`,
@@ -118,6 +127,7 @@ export async function updateProjectAction(_: ActionResult, form: FormData) {
       default_return_url: nullable(form, "default_return_url"),
       default_qris_source_id: nullable(form, "default_qris_source_id"),
       default_expiry_min: int(form, "default_expiry_min", "Masa berlaku"),
+      ...codeRange(form),
     });
     return { message: "Perubahan disimpan." };
   });

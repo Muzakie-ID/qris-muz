@@ -65,6 +65,7 @@ export default async function ProjectsPage() {
                 ["Return URL default", p.default_return_url ?? "–"],
                 ["QRIS default", qrisName(qris, p.default_qris_source_id)],
                 ["Masa berlaku tagihan", `${p.default_expiry_min} menit`],
+                ["Kode unik", `${p.unique_code_min.toLocaleString("id-ID")}–${p.unique_code_max.toLocaleString("id-ID")} (${(p.unique_code_max - p.unique_code_min + 1).toLocaleString("id-ID")} kode)`],
               ].map(([k, v]) => (
                 <div key={k} className="flex min-w-0 flex-col gap-0.5 py-2">
                   <dt className="text-xs text-faint">{k}</dt>
@@ -193,6 +194,36 @@ function ProjectFields({ qris, project }: { qris: QrisSource[]; project?: Projec
         />
         <span className={hintCls}>Tujuan pembeli setelah bayar, bila tagihan tidak menyertakan return_url.</span>
       </label>
+      <fieldset className="flex min-w-0 flex-col gap-1.5">
+        <legend className="mb-1.5 text-[13px] font-medium">Rentang kode unik</legend>
+        <div className="flex items-center gap-2">
+          <input
+            name="unique_code_min"
+            type="number"
+            min={1}
+            max={99999}
+            required
+            aria-label="Kode unik terkecil"
+            defaultValue={project?.unique_code_min ?? 1}
+            className={inputCls}
+          />
+          <span className="text-faint">sampai</span>
+          <input
+            name="unique_code_max"
+            type="number"
+            min={1}
+            max={99999}
+            required
+            aria-label="Kode unik terbesar"
+            defaultValue={project?.unique_code_max ?? 999}
+            className={inputCls}
+          />
+        </div>
+        <span className={hintCls}>
+          Ditambahkan ke nominal agar setiap tagihan berbeda, mis. 500–1999 membuat Rp50.000 menjadi Rp50.500–Rp51.999. Pembeli
+          membayar tambahan ini. Bawaan 1–999; minimal 10 kode.
+        </span>
+      </fieldset>
       <label className={labelCls}>
         QRIS default
         <select name="default_qris_source_id" defaultValue={project?.default_qris_source_id ?? ""} className={inputCls}>

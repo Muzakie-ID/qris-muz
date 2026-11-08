@@ -22,3 +22,18 @@ describe('pickFreeCode', () => {
     ).toBeNull();
   });
 });
+
+describe('pickFreeCode dengan rentang proyek', () => {
+  it('hanya memilih kode di dalam rentang', () => {
+    for (let i = 0; i < 300; i++) {
+      const c = pickFreeCode(new Set([500, 501]), 1999, 500)!;
+      expect(c).toBeGreaterThanOrEqual(502);
+      expect(c).toBeLessThanOrEqual(1999);
+    }
+  });
+
+  it('null bila seluruh rentang terpakai', () => {
+    const used = new Set(Array.from({ length: 10 }, (_, i) => 500 + i));
+    expect(pickFreeCode(used, 509, 500)).toBeNull();
+  });
+});

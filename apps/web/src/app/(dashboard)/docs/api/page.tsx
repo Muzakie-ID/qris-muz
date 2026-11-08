@@ -105,7 +105,7 @@ tx = res.json()
       <Table
         head={["Field", "Wajib", "Keterangan"]}
         rows={[
-          [<C key="c">amount</C>, "Ya", "Nominal pesanan dalam rupiah (bilangan bulat ≥ 1). Kode unik ditambahkan otomatis."],
+          [<C key="c">amount</C>, "Ya", "Nominal pesanan dalam rupiah (bilangan bulat ≥ 1). Kode unik ditambahkan otomatis sesuai rentang kode unik proyek."],
           [<C key="c">merchant_ref</C>, "Ya", "Nomor pesanan di sistem Anda, maks. 100 karakter. Dikembalikan di respons dan webhook."],
           [<C key="c">expiry_min</C>, "Tidak", "Masa berlaku dalam menit (1–1440). Bawaan: pengaturan proyek (15)."],
           [<C key="c">return_url</C>, "Tidak", "Ke mana pembeli diarahkan setelah lunas. Bawaan: Return URL default proyek."],
@@ -205,7 +205,7 @@ tx = res.json()
           ["400", "Field salah/kurang, amount bukan bilangan bulat, metadata > 4 KB, amount melebihi batas", "Perbaiki request."],
           ["401", "Header Authorization tidak ada, API key salah atau sudah dicabut", "Periksa API key di Proyek & API key."],
           ["404", "Tagihan tidak ada atau milik proyek lain", "Periksa ID."],
-          ["409", "Membatalkan tagihan yang tidak PENDING; semua kode unik untuk nominal itu sedang terpakai", "Cek status; untuk kode unik, coba lagi sebentar atau ubah nominal."],
+          ["409", "Membatalkan tagihan yang tidak PENDING; semua kode unik di rentang proyek untuk nominal itu sedang terpakai", "Cek status; untuk kode unik, coba lagi sebentar, ubah nominal, atau perlebar rentang kode unik proyek."],
           ["422", "Belum ada QRIS aktif, QRIS tidak aktif, atau lebih dari satu QRIS aktif tanpa QRIS default proyek", "Atur di halaman QRIS / Proyek."],
           ["429", "Terlalu banyak request", "Tunggu lalu ulangi."],
           ["5xx", "Gangguan server", <>Ulangi dengan <C key="c">Idempotency-Key</C> yang sama.</>],
@@ -216,7 +216,7 @@ tx = res.json()
       <Ul>
         <li>Simpan <C>id</C> dan <C>final_amount</C> di pesanan; jangan mengandalkan <C>return_url</C> sebagai bukti bayar. Bukti bayar adalah webhook atau status <C>PAID</C>.</li>
         <li>Selalu kirim <C>Idempotency-Key</C>.</li>
-        <li>Batas nominal per tagihan mengikuti batas QRIS (bawaan Rp10.000.000 dikurangi ruang kode unik).</li>
+        <li>Batas nominal per tagihan mengikuti batas QRIS (bawaan Rp10.000.000) dikurangi kode unik terbesar proyek.</li>
       </Ul>
     </>
   );

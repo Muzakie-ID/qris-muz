@@ -55,7 +55,7 @@ sequenceDiagram
 1. **QRIS dinamis.** Gateway mengambil QRIS statis merchant, mengubah tag 01 menjadi `12`
    (dinamis), menyisipkan nominal di tag 54, membuang tag tip (55–57) agar nominal tidak bisa
    diubah pembeli, lalu menghitung ulang CRC16.
-2. **Nominal unik.** Setiap tagihan mendapat kode unik 1–999 yang ditambahkan ke nominal, misalnya
+2. **Nominal unik.** Setiap tagihan mendapat kode unik (bawaan 1–999, rentangnya bisa diatur per proyek) yang ditambahkan ke nominal, misalnya
    Rp50.000 menjadi Rp50.087. Kode unik dikunci per QRIS selama tagihan aktif dan 24 jam setelahnya,
    sehingga pembayaran yang telat tidak tercocokkan ke tagihan baru.
 3. **Konfirmasi.** HP listener meneruskan teks notifikasi mentah ke server. Server membaca nominal

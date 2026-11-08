@@ -54,6 +54,8 @@ function projectView(p: Project) {
     default_return_url: p.defaultReturnUrl,
     default_qris_source_id: p.defaultQrisSourceId,
     default_expiry_min: p.defaultExpiryMin,
+    unique_code_min: p.uniqueCodeMin,
+    unique_code_max: p.uniqueCodeMax,
     created_at: p.createdAt.toISOString(),
   };
 }
@@ -224,6 +226,8 @@ export class AdminController {
       defaultReturnUrl: dto.default_return_url,
       defaultQrisSourceId: dto.default_qris_source_id,
       defaultExpiryMin: dto.default_expiry_min,
+      uniqueCodeMin: dto.unique_code_min,
+      uniqueCodeMax: dto.unique_code_max,
     });
     await this.audit.log('project.created', project.id, { name: project.name });
     return { ...projectView(project), webhook_secret: webhookSecret };
@@ -237,6 +241,8 @@ export class AdminController {
       defaultReturnUrl: dto.default_return_url,
       defaultQrisSourceId: dto.default_qris_source_id,
       defaultExpiryMin: dto.default_expiry_min,
+      uniqueCodeMin: dto.unique_code_min,
+      uniqueCodeMax: dto.unique_code_max,
     });
     await this.audit.log('project.updated', id, { ...dto });
     return projectView(p);

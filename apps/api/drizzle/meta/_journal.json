@@ -29,6 +29,13 @@
       "when": 1794114047410,
       "tag": "0003_owner_auth_alerts",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1794143238669,
+      "tag": "0004_project_unique_code_range",
+      "breakpoints": true
     }
   ]
 }
