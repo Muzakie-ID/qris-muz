@@ -27,7 +27,7 @@ interface SidebarProps {
 }
 
 function isActive(pathname: string, href: string) {
-  return href === "/" ? pathname === "/" : pathname.startsWith(href);
+  return href === "/dashboard" ? pathname === "/dashboard" : pathname.startsWith(href);
 }
 
 export function Sidebar({ unreadEvents, listenerOnline, ownerEmail, totpEnabled }: SidebarProps) {
@@ -85,7 +85,7 @@ export function Sidebar({ unreadEvents, listenerOnline, ownerEmail, totpEnabled 
   const panel = (
     <div className="flex h-full flex-col gap-4 px-2 py-3">
       <div className={cn("flex items-center justify-between px-2 py-1", collapsed && "lg:flex-col lg:gap-3 lg:px-0")}>
-        <Link href="/" className="flex items-center gap-2" aria-label="qrismuz, ke beranda">
+        <Link href="/dashboard" className="flex items-center gap-2" aria-label="qrismuz, ke beranda">
           <QrCode className="size-[22px]" strokeWidth={2} aria-hidden />
           <span className={cn("text-lg font-semibold tracking-[-0.03em]", collapsed && "lg:hidden")}>qrismuz</span>
         </Link>
@@ -192,7 +192,7 @@ export function Sidebar({ unreadEvents, listenerOnline, ownerEmail, totpEnabled 
     <>
       {/* Bar atas untuk layar kecil */}
       <div className="flex items-center justify-between px-2 pb-1 lg:hidden">
-        <Link href="/" className="flex items-center gap-2" aria-label="qrismuz, ke beranda">
+        <Link href="/dashboard" className="flex items-center gap-2" aria-label="qrismuz, ke beranda">
           <QrCode className="size-[22px]" strokeWidth={2} aria-hidden />
           <span className="text-lg font-semibold tracking-[-0.03em]">qrismuz</span>
         </Link>

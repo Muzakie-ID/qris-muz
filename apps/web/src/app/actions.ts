@@ -18,7 +18,7 @@ export interface LoginState extends FormState {
 /** Hanya jalur internal (mis. /transaksi?status=PAID) yang boleh jadi tujuan setelah login. */
 function safeNext(next: FormDataEntryValue | null): string {
   const n = typeof next === "string" ? next : "";
-  return n.startsWith("/") && !n.startsWith("//") ? n : "/";
+  return n.startsWith("/") && !n.startsWith("//") && n !== "/" ? n : "/dashboard";
 }
 
 async function startSession(r: Extract<LoginResponse, { status: "ok" }>) {

@@ -170,7 +170,7 @@ export async function deviceCommandAction(_: ActionResult, form: FormData) {
 }
 
 export async function revokeDeviceAction(_: ActionResult, form: FormData) {
-  return run(["/perangkat", "/"], async () => {
+  return run(["/perangkat", "/dashboard"], async () => {
     await revokeDevice(required(form, "device_id", "Perangkat"));
   });
 }
@@ -253,7 +253,7 @@ export async function retryWebhookAction(_: ActionResult, form: FormData) {
 }
 
 export async function reprocessEventsAction() {
-  return run(["/mutasi", "/parser", "/"], async () => {
+  return run(["/mutasi", "/parser", "/dashboard"], async () => {
     const r = await reprocessEvents();
     return {
       message:
@@ -280,14 +280,14 @@ export async function totpSetupAction() {
 }
 
 export async function totpEnableAction(_: ActionResult, form: FormData) {
-  return run(["/pengaturan", "/"], async () => {
+  return run(["/pengaturan", "/dashboard"], async () => {
     await totpEnable(required(form, "code", "Kode").replace(/\s/g, ""));
     return { message: "2FA aktif. Login berikutnya meminta kode dari aplikasi authenticator." };
   });
 }
 
 export async function totpDisableAction(_: ActionResult, form: FormData) {
-  return run(["/pengaturan", "/"], async () => {
+  return run(["/pengaturan", "/dashboard"], async () => {
     await totpDisable(String(form.get("password") ?? ""), required(form, "code", "Kode").replace(/\s/g, ""));
     return { message: "2FA dimatikan." };
   });
@@ -325,7 +325,7 @@ export async function testTelegramAction() {
 // --- Transaksi ---
 
 export async function confirmTransactionAction(_: ActionResult, form: FormData) {
-  return run(["/transaksi", "/"], async () => {
+  return run(["/transaksi", "/dashboard"], async () => {
     const reason = required(form, "reason", "Alasan");
     if (reason.length > 500) throw new FormError("Alasan maksimal 500 karakter.");
     await confirmTransaction(required(form, "transaction_id", "Transaksi"), reason);

@@ -1,19 +1,25 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { SESSION_COOKIE, looksLikeSession } from "@/lib/session";
 
+/** Halaman yang bisa dibuka tanpa login: landing page dan dokumentasi. */
+function isPublic(pathname: string) {
+  return pathname === "/" || pathname === "/docs" || pathname.startsWith("/docs/") || pathname === "/robots.txt";
+}
+
 /**
- * Semua halaman dashboard wajib login. Di sini hanya dicek ada-tidaknya cookie sesi; keabsahannya
- * diperiksa backend di setiap request, dan sesi yang ditolak diarahkan ke /login.
- * Halaman bayar pembeli (/pay) tetap publik.
+ * Dashboard wajib login. Di sini hanya dicek ada-tidaknya cookie sesi; keabsahannya diperiksa
+ * backend di setiap request, dan sesi yang ditolak diarahkan ke /login.
+ * Halaman bayar pembeli (/pay), landing page, dan dokumentasi tetap publik.
  */
 export function middleware(req: NextRequest) {
-  if (looksLikeSession(req.cookies.get(SESSION_COOKIE)?.value)) return NextResponse.next();
+  const { pathname, search } = req.nextUrl;
+  if (isPublic(pathname) || looksLikeSession(req.cookies.get(SESSION_COOKIE)?.value)) return NextResponse.next();
   const url = req.nextUrl.clone();
   url.pathname = "/login";
-  url.search = req.nextUrl.pathname === "/" ? "" : `?next=${encodeURIComponent(req.nextUrl.pathname + req.nextUrl.search)}`;
+  url.search = pathname === "/dashboard" ? "" : `?next=${encodeURIComponent(pathname + search)}`;
   return NextResponse.redirect(url);
 }
 
 export const config = {
-  matcher: ["/((?!login|pay/|_next/|favicon.ico).*)"],
+  matcher: ["/((?!login|pay/|_next/|favicon.ico|icon|opengraph-image).*)"],
 };
