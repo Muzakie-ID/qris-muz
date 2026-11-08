@@ -27,8 +27,10 @@ pembeli boleh membaca status (CORS).
 
 | Rute | Akses | Isi |
 |---|---|---|
+| `/` | Publik | Landing page: demo pembayaran beranimasi (tagihan → kode unik → notifikasi → lunas), cara kerja, fitur, contoh API. Owner yang sudah login melihat tombol Buka dashboard |
+| `/docs` | Publik | Dokumentasi tata cara (10 halaman), bisa dibaca tanpa login |
 | `/login` | Publik | Email + password owner, lalu kode 2FA bila aktif |
-| `/` | Login | Ringkasan per hari/minggu/bulan, pendapatan 12 bulan, status listener, status transaksi 7 hari, pembayaran terbaru, peringatan notifikasi tak terbaca |
+| `/dashboard` | Login | Ringkasan per hari/minggu/bulan, pendapatan 12 bulan, status listener, status transaksi 7 hari, pembayaran terbaru, peringatan notifikasi tak terbaca |
 | `/transaksi` | Login | Daftar transaksi semua proyek: filter status, cari ref order / nominal / ID, halaman (`?status=&q=&page=`). Tombol **Tandai lunas** (konfirmasi manual dengan alasan) untuk tagihan menunggu/kedaluwarsa/dibatalkan |
 | `/pay/[id]` | Publik | Halaman bayar pembeli: QR, nominal unik, hitung mundur, status realtime (SSE, cadangan cek berkala), kembali otomatis ke `return_url` setelah lunas |
 | `/mutasi` | Login | Notifikasi dana masuk mentah dari HP listener: nominal terbaca, QRIS, hasil cocok (cocok, bayar telat, tidak cocok, tak terbaca, diabaikan), tombol **Proses ulang** (`?filter=&page=`) |
@@ -37,7 +39,6 @@ pembeli boleh membaca status (CORS).
 | `/qris` | Login | Daftar QRIS (merchant, NMID, package sumber). Tambah QRIS dengan unggah foto/screenshot (pilih file, seret, atau Ctrl+V; dibaca di browser dengan BarcodeDetector atau jsQR, foto tidak dikirim ke server) atau tempel teks, dengan pratinjau merchant, NMID, penyelenggara, dan cek CRC sebelum disimpan. Ubah label/package, aktif/nonaktif |
 | `/parser` | Login | Daftar pola regex, tambah/ubah (package, prioritas, cocok otomatis, aktif), alat uji teks notifikasi, peringatan notifikasi tak terbaca |
 | `/webhook` | Login | Log pengiriman webhook semua proyek: status, percobaan, respons/error terakhir, jadwal coba berikutnya, tombol **Kirim ulang** (`?status=&page=`) |
-| `/docs` | Login | Dokumentasi tata cara: cara kerja, QRIS, HP listener, proyek & API key, API transaksi (contoh curl/Node.js/PHP/Python dengan alamat API asli), webhook dan verifikasi tanda tangan, alur pembayaran, parser, Telegram & keamanan, server dan masalah umum |
 | `/pengaturan` | Login | Ganti password, nyalakan/matikan 2FA (QR authenticator), daftar sesi aktif dan cabut, notifikasi Telegram (token, chat ID, kategori, pesan uji, log), status backup dan uji restore |
 
 Tombol **Buat transaksi uji** membuat tagihan Rp1.000 sungguhan di proyek pertama (lewat
@@ -52,5 +53,5 @@ Tombol **Buat transaksi uji** membuat tagihan Rp1.000 sungguhan di proyek pertam
   daftar sesi memakai data pengunjung, bukan server web.
 - Perubahan data memakai server action (`src/app/admin-actions.ts`) yang memeriksa sesi, memanggil
   backend, lalu memperbarui halaman (`revalidatePath`). Isian form tidak hilang bila backend menolak.
-- `src/middleware.ts` mewajibkan cookie sesi untuk semua halaman kecuali `/login` dan `/pay/*`.
+- `src/middleware.ts` mewajibkan cookie sesi untuk semua halaman kecuali `/`, `/docs`, `/login`, dan `/pay/*`.
 - `Dockerfile` membangun server mandiri Next.js (`output: "standalone"`); lihat `deploy/`.

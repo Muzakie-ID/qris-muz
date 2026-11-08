@@ -2,15 +2,14 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { ChevronDown } from "lucide-react";
 import { DOCS } from "@/lib/docs-nav";
 import { cn } from "@/lib/cn";
 
-/** Menu samping dokumentasi; di layar kecil menjadi daftar yang bisa digeser. */
-export function DocsNav() {
-  const pathname = usePathname();
+function Groups({ pathname }: { pathname: string }) {
   const groups = Array.from(new Set(DOCS.map((d) => d.group)));
   return (
-    <nav aria-label="Dokumentasi" className="flex flex-col gap-4 lg:sticky lg:top-6">
+    <>
       {groups.map((g) => (
         <div key={g} className="flex flex-col gap-0.5">
           <span className="px-2.5 pb-1 text-xs text-faint">{g}</span>
@@ -32,7 +31,32 @@ export function DocsNav() {
           })}
         </div>
       ))}
-    </nav>
+    </>
+  );
+}
+
+/** Menu dokumentasi: daftar isi yang bisa dibuka-tutup di HP, menu samping tetap di desktop. */
+export function DocsNav() {
+  const pathname = usePathname();
+  const current = DOCS.find((d) => d.href === pathname);
+  return (
+    <>
+      <details key={pathname} className="group rounded-xl border border-line lg:hidden">
+        <summary className="flex cursor-pointer list-none items-center justify-between px-4 py-3 [&::-webkit-details-marker]:hidden">
+          <span className="flex flex-col">
+            <span className="text-xs text-faint">Daftar isi</span>
+            <span className="font-medium">{current?.title ?? "Dokumentasi"}</span>
+          </span>
+          <ChevronDown className="size-4 text-muted transition-transform group-open:rotate-180" strokeWidth={1.75} aria-hidden />
+        </summary>
+        <nav aria-label="Dokumentasi" className="flex flex-col gap-4 border-t border-line-soft px-2 py-3">
+          <Groups pathname={pathname} />
+        </nav>
+      </details>
+      <nav aria-label="Dokumentasi" className="hidden flex-col gap-4 lg:sticky lg:top-6 lg:flex">
+        <Groups pathname={pathname} />
+      </nav>
+    </>
   );
 }
 

@@ -6,7 +6,7 @@ export default function NotFound() {
       <h1 className="text-[22px] font-medium tracking-[-0.02em]">Halaman tidak ditemukan</h1>
       <p className="max-w-sm text-faint">Tagihan atau halaman yang kamu cari tidak ada, atau tautannya salah.</p>
       <Link href="/" className="mt-2 inline-flex h-11 items-center rounded-full bg-ink px-5 font-medium text-white">
-        Ke beranda
+        Ke halaman utama
       </Link>
     </div>
   );

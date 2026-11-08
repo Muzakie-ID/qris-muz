@@ -19,7 +19,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
           <p className="text-faint">Khusus owner gateway.</p>
         </div>
         {expired && <p className="rounded-xl bg-subtle p-3 text-muted">Sesi berakhir. Silakan masuk lagi.</p>}
-        <LoginForm next={next ?? "/"} />
+        <LoginForm next={next ?? "/dashboard"} />
         <p className="text-xs text-faint">
           Belum punya akun owner? Buat di server: <code className="font-mono">node dist/scripts/owner-cli.js create email</code>
         </p>
