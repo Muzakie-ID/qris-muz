@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { ArrowRight, FlaskConical } from "lucide-react";
+import { ArrowRight } from "lucide-react";
+import { TestPaymentButton } from "@/components/test-payment-button";
 import { cn } from "@/lib/cn";
 
 export function PageHeader({ title, description }: { title: string; description: string }) {
@@ -9,13 +10,7 @@ export function PageHeader({ title, description }: { title: string; description:
         <h1 className="text-[28px] font-medium tracking-[-0.03em]">{title}</h1>
         <p className="text-faint">{description}</p>
       </div>
-      <Link
-        href="/pay/01JC8Q4V7QF2"
-        className="inline-flex h-11 items-center gap-2 rounded-full bg-ink px-[18px] font-medium text-white hover:bg-black"
-      >
-        <FlaskConical className="size-4" strokeWidth={1.75} aria-hidden />
-        Buat transaksi uji
-      </Link>
+      <TestPaymentButton />
     </header>
   );
 }

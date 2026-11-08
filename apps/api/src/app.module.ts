@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { AdminController } from './admin/admin.controller';
 import { AdminGuard } from './admin/admin.guard';
+import { DashboardService } from './admin/dashboard.service';
 import { CheckoutController } from './checkout/checkout.controller';
 import { CommonModule } from './common/common.module';
 import { validateEnv } from './config/env';
@@ -41,6 +42,7 @@ import { WebhooksModule } from './webhooks/webhooks.module';
     DevicesService,
     DeviceSignatureGuard,
     AdminGuard,
+    DashboardService,
   ],
 })
 export class AppModule {}

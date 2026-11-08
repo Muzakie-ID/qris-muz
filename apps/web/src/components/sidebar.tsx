@@ -15,6 +15,7 @@ import {
   Settings,
   X,
 } from "lucide-react";
+import { logout } from "@/app/actions";
 import { MAIN_NAV, SYSTEM_NAV, type NavItem } from "@/lib/nav";
 import { cn } from "@/lib/cn";
 
@@ -123,21 +124,19 @@ export function Sidebar({ unreadEvents, listenerOnline }: SidebarProps) {
         <ChevronsUpDown className={cn("size-4 text-faint", collapsed && "lg:hidden")} strokeWidth={1.75} aria-hidden />
       </button>
 
-      <label
-        className={cn(
-          "flex h-10 items-center gap-2 rounded-xl bg-[#e9e9e7] pl-3 pr-1.5 text-faint",
-          collapsed && "lg:hidden",
-        )}
-      >
+      <form action="/transaksi" role="search" className={cn(collapsed && "lg:hidden")}>
+      <label className="flex h-10 items-center gap-2 rounded-xl bg-[#e9e9e7] pl-3 pr-1.5 text-faint">
         <Search className="size-4" strokeWidth={1.75} aria-hidden />
         <input
           type="search"
+          name="q"
           placeholder="Cari transaksi"
           aria-label="Cari transaksi"
           className="min-w-0 flex-1 bg-transparent text-ink outline-none placeholder:text-faint"
         />
-        <kbd className="rounded-md border border-[#dcdcd9] bg-surface px-1.5 py-0.5 font-mono text-[11px] text-muted">⌘K</kbd>
+        <kbd className="rounded-md border border-[#dcdcd9] bg-surface px-1.5 py-0.5 font-mono text-[11px] text-muted">Enter</kbd>
       </label>
+      </form>
 
       <nav aria-label="Menu utama" className="flex flex-col gap-0.5">
         <span className={cn("px-2 pb-1.5 text-xs text-faint", collapsed && "lg:sr-only")}>Menu</span>
@@ -151,7 +150,7 @@ export function Sidebar({ unreadEvents, listenerOnline }: SidebarProps) {
           <span className="flex size-9 shrink-0 items-center justify-center rounded-[10px] bg-ink font-semibold text-white">M</span>
           <span className={cn("flex flex-col leading-tight", collapsed && "lg:hidden")}>
             <span className="font-medium">Muzakie</span>
-            <span className="text-xs text-faint">Owner · 2FA aktif</span>
+            <span className="text-xs text-faint">Owner</span>
           </span>
         </div>
         <Link
@@ -162,14 +161,16 @@ export function Sidebar({ unreadEvents, listenerOnline }: SidebarProps) {
           <Settings className="size-[18px]" strokeWidth={1.75} aria-hidden />
           <span className={cn(collapsed && "lg:sr-only")}>Pengaturan</span>
         </Link>
+        <form action={logout} className="contents">
         <button
-          type="button"
+          type="submit"
           title={collapsed ? "Keluar" : undefined}
           className={cn("flex h-10 items-center gap-2.5 rounded-lg px-2 text-ink-2 hover:bg-subtle", collapsed && "lg:justify-center lg:px-0")}
         >
           <LogOut className="size-[18px]" strokeWidth={1.75} aria-hidden />
           <span className={cn(collapsed && "lg:sr-only")}>Keluar</span>
         </button>
+        </form>
       </div>
     </div>
   );

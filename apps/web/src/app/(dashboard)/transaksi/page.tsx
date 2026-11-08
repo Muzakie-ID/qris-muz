@@ -2,21 +2,30 @@ import type { Metadata } from "next";
 import { CircleCheck, Clock, TriangleAlert } from "lucide-react";
 import { TransactionsTable } from "@/components/transactions/transactions-table";
 import { PageHeader } from "@/components/ui";
+import { listTransactions } from "@/lib/api";
 import { formatRupiah } from "@/lib/format";
-import { getTransactions } from "@/lib/mock-data";
 import type { TransactionStatus } from "@/lib/types";
 
 export const metadata: Metadata = { title: "Transaksi" };
+export const dynamic = "force-dynamic";
 
-export default function TransactionsPage() {
-  const transactions = getTransactions();
-  const sum = (status: TransactionStatus) =>
-    transactions.filter((t) => t.status === status).reduce((total, t) => total + t.finalAmount, 0);
+const STATUSES: TransactionStatus[] = ["PENDING", "PAID", "EXPIRED", "CANCELLED", "LATE_PAID"];
+
+export default async function TransactionsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ status?: string; q?: string; page?: string }>;
+}) {
+  const sp = await searchParams;
+  const status = STATUSES.includes(sp.status as TransactionStatus) ? (sp.status as TransactionStatus) : undefined;
+  const q = (sp.q ?? "").trim().slice(0, 100);
+  const page = Math.max(1, Number.parseInt(sp.page ?? "1", 10) || 1);
+  const data = await listTransactions({ status, q: q || undefined, page });
 
   const stats = [
-    { label: "Lunas", value: sum("PAID"), icon: CircleCheck, tone: "text-ok" },
-    { label: "Menunggu bayar", value: sum("PENDING"), icon: Clock, tone: "text-ink" },
-    { label: "Perlu keputusan (bayar telat)", value: sum("LATE_PAID"), icon: TriangleAlert, tone: "text-warn-icon" },
+    { label: "Lunas", value: data.sums.PAID, icon: CircleCheck, tone: "text-ok" },
+    { label: "Menunggu bayar", value: data.sums.PENDING, icon: Clock, tone: "text-ink" },
+    { label: "Perlu keputusan (bayar telat)", value: data.sums.LATE_PAID, icon: TriangleAlert, tone: "text-warn-icon" },
   ];
 
   return (
@@ -35,7 +44,7 @@ export default function TransactionsPage() {
         ))}
       </div>
 
-      <TransactionsTable transactions={transactions} />
+      <TransactionsTable data={data} status={status ?? "ALL"} q={q} />
     </>
   );
 }

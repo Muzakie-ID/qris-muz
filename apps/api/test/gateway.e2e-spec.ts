@@ -1,5 +1,5 @@
 import { INestApplication } from '@nestjs/common';
-import { eq } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 import { createServer, type IncomingHttpHeaders, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import request from 'supertest';
@@ -645,6 +645,134 @@ describe('Gateway (e2e)', () => {
 
     it('404 untuk ID yang tidak ada', () =>
       http().get('/public/checkout/01HTIDAKADA').expect(404));
+  });
+
+  describe('endpoint dashboard', () => {
+    it('ringkasan berisi angka nyata dari database', async () => {
+      const res = await admin('get', '/admin/dashboard').expect(200);
+      const d = res.body as {
+        summary: Record<
+          string,
+          {
+            income: number;
+            paid: number;
+            created: number;
+            created_paid: number;
+          }
+        >;
+        pending: { total: number };
+        status_counts: { status: string; count: number }[];
+        recent_payments: { id: string; amount: number; project_name: string }[];
+        monthly_revenue: { month: string; label: string; amount: number }[];
+        listener: {
+          listener_online: boolean;
+          devices: { battery: number | null }[];
+        };
+        unparsed_events: number;
+      };
+      const paidRows = await db.query.transactions.findMany({
+        where: inArray(transactions.status, ['PAID', 'LATE_PAID']),
+      });
+      const income = paidRows.reduce((s, t) => s + t.finalAmount, 0);
+      expect(d.summary.day.paid).toBe(paidRows.length);
+      expect(d.summary.day.income).toBe(income);
+      expect(d.summary.month.income).toBe(income);
+      expect(d.summary.week.created).toBeGreaterThanOrEqual(
+        d.summary.week.created_paid,
+      );
+      expect(d.pending.total).toBe(
+        (
+          await db.query.transactions.findMany({
+            where: eq(transactions.status, 'PENDING'),
+          })
+        ).length,
+      );
+      expect(d.status_counts.map((s) => s.status)).toEqual([
+        'PENDING',
+        'PAID',
+        'EXPIRED',
+        'LATE_PAID',
+      ]);
+      expect(d.recent_payments.length).toBeGreaterThan(0);
+      expect(d.recent_payments[0].project_name).toBe('KursusKu');
+      expect(d.monthly_revenue).toHaveLength(12);
+      expect(d.monthly_revenue.at(-1)!.amount).toBe(income);
+      expect(d.listener.listener_online).toBe(true);
+      expect(d.unparsed_events).toBeGreaterThanOrEqual(1);
+    });
+
+    it('daftar transaksi bisa difilter, dicari, dan dibagi halaman', async () => {
+      const all = await admin('get', '/admin/transactions?per_page=5').expect(
+        200,
+      );
+      const body = all.body as {
+        items: { status: string }[];
+        total: number;
+        counts: Record<string, number>;
+        sums: Record<string, number>;
+      };
+      expect(body.items).toHaveLength(5);
+      expect(body.total).toBe(body.counts.ALL);
+
+      const paid = await admin(
+        'get',
+        '/admin/transactions?status=PAID&per_page=100',
+      ).expect(200);
+      const paidBody = paid.body as {
+        items: { status: string }[];
+        total: number;
+      };
+      expect(paidBody.items.every((t) => t.status === 'PAID')).toBe(true);
+      expect(paidBody.total).toBe(body.counts.PAID);
+
+      const byRef = await admin(
+        'get',
+        '/admin/transactions?q=order-pay',
+      ).expect(200);
+      expect(
+        (byRef.body as { items: { merchant_ref: string }[] }).items.map(
+          (t) => t.merchant_ref,
+        ),
+      ).toEqual(['ORDER-PAY']);
+
+      const t = await createTx({ amount: 31000, merchant_ref: 'CARI-NOMINAL' });
+      const byAmount = await admin(
+        'get',
+        `/admin/transactions?q=${t.final_amount.toLocaleString('id-ID')}`,
+      ).expect(200);
+      expect(
+        (byAmount.body as { items: { id: string }[] }).items.map((x) => x.id),
+      ).toContain(t.id);
+
+      const page2 = await admin(
+        'get',
+        '/admin/transactions?per_page=5&page=2',
+      ).expect(200);
+      expect((page2.body as { page: number }).page).toBe(2);
+
+      await admin('get', '/admin/transactions?status=SALAH').expect(400);
+      await http().get('/admin/transactions').expect(401);
+    });
+
+    it('tombol transaksi uji membuat tagihan untuk proyek pertama', async () => {
+      const res = await admin('post', '/admin/transactions/test')
+        .send({ amount: 1000 })
+        .expect(201);
+      const t = res.body as {
+        id: string;
+        status: string;
+        merchant_ref: string;
+        final_amount: number;
+        metadata: Record<string, unknown>;
+      };
+      expect(t).toMatchObject({ status: 'PENDING', metadata: { test: true } });
+      expect(t.merchant_ref).toMatch(/^TEST-\d+$/);
+      expect(t.final_amount).toBeGreaterThan(1000);
+      await http().get(`/public/checkout/${t.id}`).expect(200);
+      await admin('post', '/admin/transactions/test')
+        .send({ amount: 0 })
+        .expect(400);
+    });
   });
 
   it('memproses ulang event setelah package QRIS diperbaiki', async () => {

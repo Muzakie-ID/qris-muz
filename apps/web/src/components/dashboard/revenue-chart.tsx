@@ -1,8 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronDown, Ellipsis } from "lucide-react";
-import { Card, SectionHeader, Tag } from "@/components/ui";
+import { Card, SectionHeader } from "@/components/ui";
 import { formatRupiah } from "@/lib/format";
 import type { MonthlyRevenue } from "@/lib/types";
 
@@ -12,18 +11,29 @@ const LEFT = 52;
 const RIGHT = 624;
 const TOP = 30;
 const BOTTOM = 190;
-const STEP = 5_000_000;
 
-function juta(v: number) {
-  return `${(v / 1_000_000).toLocaleString("id-ID", { maximumFractionDigits: 1 })} jt`;
+/** Label ringkas: 250 rb, 1,5 jt. */
+function short(v: number) {
+  if (v >= 1_000_000) return `${(v / 1_000_000).toLocaleString("id-ID", { maximumFractionDigits: 1 })} jt`;
+  if (v >= 1_000) return `${(v / 1_000).toLocaleString("id-ID", { maximumFractionDigits: 1 })} rb`;
+  return String(v);
 }
 
-/** Grafik garis dengan arsiran vertikal, mengikuti gaya referensi. Fase 2 di PRD. */
+/** Jarak garis bantu yang "bulat" (1, 2, atau 5 × 10ⁿ) agar ada ±4 garis. */
+function niceStep(max: number) {
+  const raw = Math.max(1, max / 4);
+  const pow = 10 ** Math.floor(Math.log10(raw));
+  const f = raw / pow;
+  return (f <= 1 ? 1 : f <= 2 ? 2 : f <= 5 ? 5 : 10) * pow;
+}
+
+/** Grafik pendapatan per bulan: garis dengan arsiran vertikal, mengikuti gaya referensi. */
 export function RevenueChart({ data }: { data: MonthlyRevenue[] }) {
   const [active, setActive] = useState(data.length - 1);
 
-  const max = Math.max(STEP, Math.ceil(Math.max(...data.map((d) => d.amount)) / STEP) * STEP);
-  const ticks = Array.from({ length: max / STEP + 1 }, (_, i) => i * STEP);
+  const step = niceStep(Math.max(...data.map((d) => d.amount), 1000));
+  const max = Math.max(step, Math.ceil(Math.max(...data.map((d) => d.amount)) / step) * step);
+  const ticks = Array.from({ length: Math.round(max / step) + 1 }, (_, i) => i * step);
   const x = (i: number) => LEFT + (i * (RIGHT - LEFT)) / Math.max(1, data.length - 1);
   const y = (v: number) => BOTTOM - (v / max) * (BOTTOM - TOP);
 
@@ -49,25 +59,17 @@ export function RevenueChart({ data }: { data: MonthlyRevenue[] }) {
 
   return (
     <section className="flex flex-col gap-3.5">
-      <SectionHeader title="Pendapatan" badge={<Tag>Fase 2</Tag>}>
-        <div className="flex gap-2">
-            <button type="button" className="inline-flex h-9 items-center gap-1.5 whitespace-nowrap rounded-[10px] border border-line bg-surface px-3 text-[13px]">
-              12 bulan terakhir
-              <ChevronDown className="size-3.5" strokeWidth={1.75} aria-hidden />
-            </button>
-            <button type="button" aria-label="Opsi lain" className="flex size-9 items-center justify-center rounded-[10px] border border-line bg-surface">
-              <Ellipsis className="size-4" strokeWidth={1.75} aria-hidden />
-            </button>
-        </div>
+      <SectionHeader title="Pendapatan">
+        <span className="text-[13px] text-faint">12 bulan terakhir</span>
       </SectionHeader>
 
       <Card className="flex flex-col gap-4 px-[22px] py-5">
         <div className="flex flex-col gap-1">
-          <span className="text-muted">Total pendapatan</span>
+          <span className="text-muted">Total 12 bulan</span>
           <span className="text-[32px] font-medium tracking-[-0.03em] tabular-nums">{formatRupiah(total)}</span>
           <span className="text-[13px] text-faint">
             {lastDiff >= 0 ? "Naik" : "Turun"}{" "}
-            <strong className="font-medium text-ink">{formatRupiah(Math.abs(lastDiff))}</strong> dari bulan sebelumnya
+            <strong className="font-medium text-ink">{formatRupiah(Math.abs(lastDiff))}</strong> dibanding bulan sebelumnya
           </span>
         </div>
 
@@ -90,7 +92,7 @@ export function RevenueChart({ data }: { data: MonthlyRevenue[] }) {
             <g key={t}>
               <line x1={LEFT - 8} x2={RIGHT + 4} y1={y(t)} y2={y(t)} stroke="#ececea" />
               <text x={36} y={y(t) + 4} textAnchor="end" fontSize="11" fill="#62625f">
-                {t === 0 ? "0" : juta(t)}
+                {t === 0 ? "0" : short(t)}
               </text>
             </g>
           ))}
@@ -101,10 +103,10 @@ export function RevenueChart({ data }: { data: MonthlyRevenue[] }) {
           <g aria-hidden>
             <rect x={tipX} y={tipY} width={tipW} height="48" rx="10" fill="#ffffff" stroke="#e3e3e0" />
             <text x={tipX + 12} y={tipY + 19} fontSize="11" fill="#62625f">
-              {cur.label} 2026
+              {cur.label} {cur.month.slice(0, 4)}
             </text>
             <text x={tipX + 12} y={tipY + 38} fontSize="14" fontWeight="500" fill="#111111">
-              {juta(cur.amount)}
+              {short(cur.amount)}
             </text>
           </g>
           {data.map((d, i) => (
