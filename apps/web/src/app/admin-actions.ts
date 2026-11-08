@@ -87,6 +87,10 @@ function int(form: FormData, name: string, label: string): number | undefined {
 
 const checked = (form: FormData, name: string) => form.get(name) === "on";
 
+function fail(message: string): never {
+  throw new FormError(message);
+}
+
 // --- Proyek & API key ---
 
 export async function createProjectAction(_: ActionResult, form: FormData) {
@@ -167,7 +171,9 @@ export async function createQrisAction(_: ActionResult, form: FormData) {
     const q = await createQrisSource({
       label: required(form, "label", "Label"),
       // Hanya buang baris baru dari hasil tempel; spasi bagian dari nama merchant.
-      payload: required(form, "payload", "Isi QRIS").replace(/[\r\n]+/g, ""),
+      payload:
+        text(form, "payload").replace(/[\r\n]+/g, "") ||
+        fail("Unggah foto QRIS atau tempel teks QRIS-nya dulu."),
       source_package: nullable(form, "source_package") ?? undefined,
     });
     return { message: `QRIS ${q.merchant_name} ditambahkan.` };

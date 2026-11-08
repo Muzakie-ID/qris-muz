@@ -188,8 +188,8 @@ echo "sdk.dir=/path/ke/android-sdk" > local.properties
 Lewat dashboard (masuk dengan akun owner):
 
 1. **Pengaturan**: nyalakan 2FA dan notifikasi Telegram.
-2. **QRIS** → Tambah QRIS: tempel teks hasil scan QRIS statis (diawali `000201`), beri label, isi
-   package aplikasi merchant bila sudah tahu.
+2. **QRIS** → Tambah QRIS: unggah foto atau screenshot QRIS statis (atau tempel teksnya), periksa
+   pratinjau merchant dan NMID, beri label, isi package aplikasi merchant bila sudah tahu.
 3. **Proyek & API key** → Proyek baru: isi URL webhook dan return URL. Salin **webhook secret** yang
    muncul (hanya ditampilkan sekali), lalu tekan **API key baru** dan salin key-nya.
 4. **Perangkat** → Tambah perangkat → Buat kode pairing, lalu di aplikasi listener tekan **Scan QR

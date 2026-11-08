@@ -4,11 +4,12 @@ import { Plus, QrCode } from "lucide-react";
 import { createQrisAction, toggleQrisAction, updateQrisAction } from "@/app/admin-actions";
 import { ActionForm, SubmitButton } from "@/components/admin/action-form";
 import { EditDialog } from "@/components/admin/edit-dialog";
+import { QrisInput } from "@/components/admin/qris-input";
 import { EmptyState, Pill } from "@/components/admin/list-controls";
 import { Card, PageHeader } from "@/components/ui";
 import { listDevices, listQrisSources, type QrisSource } from "@/lib/api";
 import { formatDateTime } from "@/lib/format";
-import { btnPrimary, btnSecondary, hintCls, inputCls, labelCls, textareaCls } from "@/lib/styles";
+import { btnPrimary, btnSecondary, hintCls, inputCls, labelCls } from "@/lib/styles";
 
 export const metadata: Metadata = { title: "QRIS" };
 export const dynamic = "force-dynamic";
@@ -39,7 +40,7 @@ export default async function QrisPage() {
 
       {sources.length === 0 ? (
         <Card>
-          <EmptyState title="Belum ada QRIS.">Tambahkan QRIS statis dari DANA Bisnis atau GoPay Merchant di bawah.</EmptyState>
+          <EmptyState title="Belum ada QRIS.">Tambahkan QRIS statis dari DANA Bisnis atau GoPay Merchant di bawah: cukup unggah foto atau screenshot QR-nya.</EmptyState>
         </Card>
       ) : (
         <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
@@ -55,28 +56,7 @@ export default async function QrisPage() {
           Tambah QRIS
         </summary>
         <ActionForm action={createQrisAction} resetOnSuccess className="flex flex-col gap-4 border-t border-line-soft px-5 py-5">
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <label className={labelCls}>
-              Label
-              <input name="label" required maxLength={100} placeholder="DANA Bisnis" className={inputCls} />
-            </label>
-            <PackageField />
-          </div>
-          <label className={labelCls}>
-            Isi QRIS statis
-            <textarea
-              name="payload"
-              required
-              rows={4}
-              maxLength={1024}
-              placeholder="00020101021126…6304ABCD"
-              className={textareaCls}
-            />
-            <span className={hintCls}>
-              Pindai QRIS statis dengan aplikasi pemindai QR biasa (bukan aplikasi bank), lalu tempel teks yang muncul. Teks
-              diawali 000201 dan diakhiri 6304 + 4 karakter. Nama merchant dan NMID dibaca otomatis.
-            </span>
-          </label>
+          <QrisInput packageField={<PackageField />} />
           <div>
             <SubmitButton className={btnPrimary} pendingLabel="Memeriksa…">
               Tambah QRIS
