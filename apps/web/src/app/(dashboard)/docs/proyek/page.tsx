@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { A, C, Callout, DocTitle, H2, P, Steps, Table } from "@/components/docs/prose";
+import { A, C, Callout, DocTitle, H2, P, Steps, Table, Ul } from "@/components/docs/prose";
 
 export const metadata: Metadata = { title: "Proyek & API key · Dokumentasi" };
 
@@ -47,9 +47,30 @@ export default function DocsProyek() {
           ["Return URL default", <>Tujuan pembeli setelah lunas, bila tagihan tidak membawa <C>return_url</C> sendiri.</>],
           ["QRIS default", "QRIS yang dipakai tagihan proyek ini bila tidak menyebut qris_source_id. Wajib diisi bila ada lebih dari satu QRIS aktif."],
           ["Masa berlaku tagihan", <>Bawaan 15 menit (1–1440). Bisa diganti per tagihan dengan <C>expiry_min</C>.</>],
+          ["Rentang kode unik", "Tambahan yang diberikan ke nominal, bawaan 1–999. Lihat penjelasan di bawah."],
         ]}
       />
       <P>Semua pengaturan bisa diubah kapan saja lewat <strong>Ubah pengaturan proyek</strong>; perubahan berlaku untuk tagihan berikutnya.</P>
+
+      <H2>Rentang kode unik</H2>
+      <P>
+        Kode unik dipilih acak dari rentang ini dan ditambahkan ke nominal. Dengan rentang 500–1999, tagihan Rp50.000 menjadi
+        antara Rp50.500 dan Rp51.999. Pembeli membayar tambahan tersebut, dan yang Anda terima adalah nominal akhirnya.
+      </P>
+      <Table
+        head={["Rentang", "Cocok untuk"]}
+        rows={[
+          ["1–999 (bawaan)", "Tambahan kecil, cukup untuk hampir semua toko."],
+          ["500–1999", "Tambahan selalu terlihat jelas (tidak pernah Rp1–Rp499) dan tersedia lebih banyak kode: 1.500."],
+          ["1–99", "Tambahan sangat kecil; cocok bila tagihan aktif dengan nominal yang sama jarang lebih dari puluhan."],
+        ]}
+      />
+      <Ul>
+        <li>Batas: 1–99.999 dan minimal berisi 10 kode.</li>
+        <li>Jumlah kode = jumlah tagihan dengan nominal dasar sama yang bisa berjalan bersamaan di satu QRIS. Kode tetap terkunci sampai 24 jam setelah tagihan kedaluwarsa. Bila habis, pembuatan tagihan ditolak 409.</li>
+        <li>Perubahan rentang berlaku untuk tagihan berikutnya; tagihan yang sudah ada tidak berubah.</li>
+        <li>Batas nominal per tagihan dikurangi kode unik terbesar, jadi rentang besar sedikit menurunkan nominal maksimal.</li>
+      </Ul>
 
       <H2>Mengganti atau mencabut API key</H2>
       <Steps

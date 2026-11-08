@@ -163,7 +163,7 @@ Untuk dashboard web:
 - **Backup**: skrip di container `backup` mencatat hasilnya ke tabel `backup_runs`; API memeriksa
   tabel itu tiap 5 menit.
 
-- **Kode unik**: 1–999 dipilih acak per QRIS, dengan kunci per QRIS di PostgreSQL (advisory lock) agar
+- **Kode unik**: dipilih acak dari rentang proyek (`unique_code_min`–`unique_code_max`, bawaan 1–999, batas 1–99.999, minimal 10 kode); keunikan dijaga per nominal akhir per QRIS, dengan kunci per QRIS di PostgreSQL (advisory lock) agar
   tidak bentrok. Nominal akhir tetap dikunci selama masa tenggang (`UNIQUE_CODE_GRACE_HOURS`) setelah
   kedaluwarsa, supaya pembayaran telat tidak masuk ke tagihan baru.
 - **Pencocokan**: notifikasi dari package QRIS X hanya dicocokkan dengan tagihan QRIS X. Lunas

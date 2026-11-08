@@ -1,4 +1,9 @@
-import { Inject, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Inject,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { and, eq, isNull } from 'drizzle-orm';
 import { randomToken, sha256Hex } from '../common/crypto';
 import { newId } from '../common/ids';
@@ -14,6 +19,28 @@ export interface CreateProjectInput {
   defaultReturnUrl?: string | null;
   defaultQrisSourceId?: string | null;
   defaultExpiryMin?: number;
+  uniqueCodeMin?: number;
+  uniqueCodeMax?: number;
+}
+
+export const UNIQUE_CODE_LIMIT = 99_999;
+export const UNIQUE_CODE_MIN_SLOTS = 10;
+
+/** Rentang kode unik harus 1–99.999 dan berisi minimal 10 kode. */
+export function assertCodeRange(min: number, max: number): void {
+  if (
+    !Number.isInteger(min) ||
+    !Number.isInteger(max) ||
+    min < 1 ||
+    max > UNIQUE_CODE_LIMIT
+  )
+    throw new BadRequestException(
+      `Rentang kode unik harus di antara 1 dan ${UNIQUE_CODE_LIMIT}.`,
+    );
+  if (max - min + 1 < UNIQUE_CODE_MIN_SLOTS)
+    throw new BadRequestException(
+      `Rentang kode unik minimal berisi ${UNIQUE_CODE_MIN_SLOTS} kode (mis. ${min}–${min + UNIQUE_CODE_MIN_SLOTS - 1}).`,
+    );
 }
 
 @Injectable()
@@ -27,6 +54,9 @@ export class ProjectsService {
   async create(input: CreateProjectInput) {
     if (input.defaultQrisSourceId)
       await this.assertQris(input.defaultQrisSourceId);
+    const codeMin = input.uniqueCodeMin ?? 1;
+    const codeMax = input.uniqueCodeMax ?? 999;
+    assertCodeRange(codeMin, codeMax);
     const webhookSecret = `whsec_${randomToken(24)}`;
     const [project] = await this.db
       .insert(projects)
@@ -37,6 +67,8 @@ export class ProjectsService {
         defaultReturnUrl: input.defaultReturnUrl ?? null,
         defaultQrisSourceId: input.defaultQrisSourceId ?? null,
         defaultExpiryMin: input.defaultExpiryMin ?? 15,
+        uniqueCodeMin: codeMin,
+        uniqueCodeMax: codeMax,
         webhookSecretEnc: this.secrets.seal(webhookSecret),
       })
       .returning();
@@ -46,6 +78,16 @@ export class ProjectsService {
   async update(id: string, input: Partial<CreateProjectInput>) {
     if (input.defaultQrisSourceId)
       await this.assertQris(input.defaultQrisSourceId);
+    if (
+      input.uniqueCodeMin !== undefined ||
+      input.uniqueCodeMax !== undefined
+    ) {
+      const current = await this.get(id);
+      assertCodeRange(
+        input.uniqueCodeMin ?? current.uniqueCodeMin,
+        input.uniqueCodeMax ?? current.uniqueCodeMax,
+      );
+    }
     const [project] = await this.db
       .update(projects)
       .set({
@@ -59,6 +101,12 @@ export class ProjectsService {
         }),
         ...(input.defaultExpiryMin !== undefined && {
           defaultExpiryMin: input.defaultExpiryMin,
+        }),
+        ...(input.uniqueCodeMin !== undefined && {
+          uniqueCodeMin: input.uniqueCodeMin,
+        }),
+        ...(input.uniqueCodeMax !== undefined && {
+          uniqueCodeMax: input.uniqueCodeMax,
         }),
       })
       .where(eq(projects.id, id))

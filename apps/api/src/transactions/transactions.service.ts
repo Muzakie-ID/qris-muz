@@ -23,6 +23,8 @@ import { toDynamicQris } from '../qris/core';
 import { WebhooksService } from '../webhooks/webhooks.service';
 import { toApiView, type TransactionRow } from './transaction-view';
 
+/** Rentang bawaan kode unik; tiap proyek bisa mengaturnya sendiri. */
+export const DEFAULT_UNIQUE_CODE_MIN = 1;
 export const MAX_UNIQUE_CODE = 999;
 
 export interface CreateTransactionInput {
@@ -46,13 +48,14 @@ function isUniqueViolation(e: unknown, constraint?: string): boolean {
   return code === '23505' && (!constraint || name === constraint);
 }
 
-/** Memilih kode unik 1–999 secara acak dari yang belum dipakai. */
+/** Memilih kode unik secara acak dari rentang [min, max] yang belum dipakai. */
 export function pickFreeCode(
   used: Set<number>,
   max = MAX_UNIQUE_CODE,
+  min = DEFAULT_UNIQUE_CODE_MIN,
 ): number | null {
   const free: number[] = [];
-  for (let c = 1; c <= max; c++) if (!used.has(c)) free.push(c);
+  for (let c = min; c <= max; c++) if (!used.has(c)) free.push(c);
   return free.length ? free[randomInt(free.length)] : null;
 }
 
@@ -105,9 +108,11 @@ export class TransactionsService implements OnModuleInit, OnModuleDestroy {
     }
 
     const max = this.config.get('QRIS_MAX_AMOUNT', { infer: true });
-    if (input.amount + MAX_UNIQUE_CODE > max) {
+    const codeMin = project.uniqueCodeMin;
+    const codeMax = project.uniqueCodeMax;
+    if (input.amount + codeMax > max) {
       throw new BadRequestException(
-        `amount maksimal ${max - MAX_UNIQUE_CODE} (menyisakan ruang untuk kode unik).`,
+        `amount maksimal ${max - codeMax} (menyisakan ruang untuk kode unik sampai ${codeMax}).`,
       );
     }
 
@@ -143,8 +148,8 @@ export class TransactionsService implements OnModuleInit, OnModuleDestroy {
               eq(transactions.qrisSourceId, source.id),
               between(
                 transactions.finalAmount,
-                input.amount + 1,
-                input.amount + MAX_UNIQUE_CODE,
+                input.amount + codeMin,
+                input.amount + codeMax,
               ),
               or(
                 gt(transactions.codeLockedUntil, now),
@@ -154,10 +159,12 @@ export class TransactionsService implements OnModuleInit, OnModuleDestroy {
           );
         const code = pickFreeCode(
           new Set(taken.map((t) => t.finalAmount - input.amount)),
+          codeMax,
+          codeMin,
         );
         if (code === null) {
           throw new ConflictException(
-            'Semua kode unik untuk nominal ini sedang dipakai. Coba lagi beberapa saat lagi.',
+            `Semua kode unik ${codeMin}–${codeMax} untuk nominal ini sedang dipakai. Coba lagi beberapa saat lagi.`,
           );
         }
         const finalAmount = input.amount + code;
