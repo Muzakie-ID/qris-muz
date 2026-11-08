@@ -2,6 +2,8 @@ import { Injectable } from '@nestjs/common';
 import { EventEmitter } from 'node:events';
 import { Observable } from 'rxjs';
 
+const ANY = Symbol('any');
+
 export interface TransactionChanged {
   transactionId: string;
   status: string;
@@ -17,6 +19,13 @@ export class TransactionEvents {
 
   emit(change: TransactionChanged): void {
     this.emitter.emit(change.transactionId, change);
+    this.emitter.emit(ANY, change);
+  }
+
+  /** Semua perubahan status, mis. untuk notifikasi Telegram. Mengembalikan fungsi berhenti. */
+  onAny(handler: (c: TransactionChanged) => void): () => void {
+    this.emitter.on(ANY, handler);
+    return () => this.emitter.off(ANY, handler);
   }
 
   watch(transactionId: string): Observable<TransactionChanged> {

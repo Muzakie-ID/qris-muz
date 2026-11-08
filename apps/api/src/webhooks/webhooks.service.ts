@@ -13,6 +13,7 @@ import { newId } from '../common/ids';
 import type { Env } from '../config/env';
 import { DB, type Db, type DbOrTx } from '../db/db.module';
 import { projects, transactions, webhookDeliveries } from '../db/schema';
+import { esc, NotifierService } from '../alerts/notifier.service';
 import { ProjectsService } from '../projects/projects.service';
 import {
   toApiView,
@@ -55,6 +56,7 @@ export class WebhooksService implements OnModuleInit, OnModuleDestroy {
     @Inject(DB) private readonly db: Db,
     private readonly config: ConfigService<Env, true>,
     private readonly projectsService: ProjectsService,
+    private readonly notifier: NotifierService,
   ) {}
 
   onModuleInit() {
@@ -199,10 +201,15 @@ export class WebhooksService implements OnModuleInit, OnModuleDestroy {
         ),
       })
       .where(eq(webhookDeliveries.id, d.id));
-    if (failed)
+    if (failed) {
       this.logger.warn(
         `Webhook ${d.eventId} gagal permanen setelah ${attempt} percobaan: ${error}`,
       );
+      await this.notifier.notify(
+        'webhook_failed',
+        `🔴 <b>Webhook gagal permanen</b> (${esc(d.eventType)})\nProyek: ${esc(project?.name ?? d.projectId)}\n${esc(error)}\nPerbaiki server proyek lalu tekan Kirim ulang di Log webhook.`,
+      );
+    }
   }
 
   /** Log semua pengiriman webhook, terbaru dulu, untuk dashboard. */

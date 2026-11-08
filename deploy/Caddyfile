@@ -1,0 +1,40 @@
+# HTTPS otomatis (Let's Encrypt) untuk dua domain. Isi domain di deploy/.env.
+{
+	email {$ACME_EMAIL}
+}
+
+(security) {
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-Server
+	}
+}
+
+# API untuk proyek, HP listener, dan status realtime halaman bayar.
+{$API_DOMAIN} {
+	import security
+
+	# Login owner dan endpoint admin hanya dipanggil server web lewat jaringan internal Docker,
+	# jadi tidak dibuka ke internet. Skrip dengan ADMIN_TOKEN dijalankan dari dalam VPS.
+	@internal path /admin /admin/* /auth /auth/*
+	respond @internal 404
+
+	# Alat uji QRIS Tahap 1 tidak dipakai di produksi.
+	@tools path /v1/qris/*
+	respond @tools 404
+
+	reverse_proxy api:3001 {
+		# Server-Sent Events halaman bayar harus langsung diteruskan, tanpa buffer.
+		flush_interval -1
+	}
+}
+
+# Dashboard owner dan halaman bayar pembeli.
+{$WEB_DOMAIN} {
+	import security
+	header X-Frame-Options "DENY"
+	encode zstd gzip
+	reverse_proxy web:3000
+}

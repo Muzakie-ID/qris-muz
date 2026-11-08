@@ -1,3 +1,4 @@
+import { Throttle } from '@nestjs/throttler';
 import {
   BadRequestException,
   Body,
@@ -18,6 +19,7 @@ import { TransactionsService } from './transactions.service';
 
 const METADATA_MAX_BYTES = 4096;
 
+@Throttle({ default: { limit: 600, ttl: 60_000 } })
 @Controller('v1/transactions')
 @UseGuards(ApiKeyGuard)
 export class TransactionsController {

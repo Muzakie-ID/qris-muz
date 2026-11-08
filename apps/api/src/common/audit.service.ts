@@ -2,8 +2,9 @@ import { Inject, Injectable } from '@nestjs/common';
 import { DB, type DbOrTx } from '../db/db.module';
 import { auditLogs } from '../db/schema';
 import { newId } from './ids';
+import { currentActor } from './request-context';
 
-/** Jejak setiap aksi owner/admin yang mengubah data. */
+/** Jejak setiap aksi owner/admin yang mengubah data. Pelaku diambil dari konteks request. */
 @Injectable()
 export class AuditService {
   constructor(@Inject(DB) private readonly db: DbOrTx) {}
@@ -12,7 +13,7 @@ export class AuditService {
     action: string,
     target: string | null,
     detail: Record<string, unknown> = {},
-    actor = 'admin',
+    actor = currentActor(),
     tx: DbOrTx = this.db,
   ): Promise<void> {
     await tx

@@ -8,19 +8,17 @@ Semua data diambil dari backend `apps/api`; tidak ada data contoh lagi.
 ```bash
 cd apps/web
 npm install
-cp .env.example .env.local   # isi ADMIN_TOKEN, DASHBOARD_PASSWORD, SESSION_SECRET
+cp .env.example .env.local
 npm run dev                  # http://localhost:3000
 ```
 
-Backend harus sudah berjalan (lihat `apps/api/README.md`).
+Backend harus sudah berjalan dan akun owner sudah dibuat (`npm run owner -- create email` di
+`apps/api`).
 
 | Variabel | Keterangan |
 |---|---|
 | `API_URL` | Alamat backend dari server Next.js, mis. `http://localhost:3001` |
-| `NEXT_PUBLIC_API_URL` | Alamat backend yang dibuka browser pembeli (status realtime di halaman bayar) |
-| `ADMIN_TOKEN` | Sama dengan `ADMIN_TOKEN` backend. Hanya dipakai di server, tidak pernah dikirim ke browser |
-| `DASHBOARD_PASSWORD` | Password login dashboard |
-| `SESSION_SECRET` | Kunci tanda tangan cookie sesi, minimal 24 karakter (`openssl rand -base64 32`) |
+| `PUBLIC_API_URL` | Alamat publik backend yang dibuka browser pembeli (status realtime di halaman bayar). Dibaca saat runtime, jadi satu image Docker bisa dipakai di domain mana pun |
 
 Di backend, `CHECKOUT_BASE_URL` harus berisi alamat web ini agar `checkout_url` benar dan browser
 pembeli boleh membaca status (CORS).
@@ -29,7 +27,7 @@ pembeli boleh membaca status (CORS).
 
 | Rute | Akses | Isi |
 |---|---|---|
-| `/login` | Publik | Masuk dengan `DASHBOARD_PASSWORD` (sesi 12 jam) |
+| `/login` | Publik | Email + password owner, lalu kode 2FA bila aktif |
 | `/` | Login | Ringkasan per hari/minggu/bulan, pendapatan 12 bulan, status listener, status transaksi 7 hari, pembayaran terbaru, peringatan notifikasi tak terbaca |
 | `/transaksi` | Login | Daftar transaksi semua proyek: filter status, cari ref order / nominal / ID, halaman (`?status=&q=&page=`) |
 | `/pay/[id]` | Publik | Halaman bayar pembeli: QR, nominal unik, hitung mundur, status realtime (SSE, cadangan cek berkala), kembali otomatis ke `return_url` setelah lunas |
@@ -39,7 +37,7 @@ pembeli boleh membaca status (CORS).
 | `/qris` | Login | Daftar QRIS (merchant, NMID, package sumber), tambah dari teks QRIS statis, ubah label/package, aktif/nonaktif |
 | `/parser` | Login | Daftar pola regex, tambah/ubah (package, prioritas, cocok otomatis, aktif), alat uji teks notifikasi, peringatan notifikasi tak terbaca |
 | `/webhook` | Login | Log pengiriman webhook semua proyek: status, percobaan, respons/error terakhir, jadwal coba berikutnya, tombol **Kirim ulang** (`?status=&page=`) |
-| `/pengaturan` | Login | Halaman sementara, menyusul |
+| `/pengaturan` | Login | Ganti password, nyalakan/matikan 2FA (QR authenticator), daftar sesi aktif dan cabut, notifikasi Telegram (token, chat ID, kategori, pesan uji, log), status backup dan uji restore |
 
 Tombol **Buat transaksi uji** membuat tagihan Rp1.000 sungguhan di proyek pertama (lewat
 `POST /admin/transactions/test`) lalu membuka halaman bayarnya.
@@ -47,9 +45,11 @@ Tombol **Buat transaksi uji** membuat tagihan Rp1.000 sungguhan di proyek pertam
 ## Cara kerja
 
 - Halaman dashboard adalah server component yang memanggil endpoint admin backend
-  (`src/lib/api.ts`) dengan `ADMIN_TOKEN` dari server.
+  (`src/lib/api.ts`) dengan token sesi owner dari cookie httpOnly. Backend memeriksa sesi di setiap
+  request; sesi yang berakhir atau dicabut diarahkan ke `/login`.
+- IP pengunjung (dari Caddy) dan user agent diteruskan ke backend, agar rate limit, log login, dan
+  daftar sesi memakai data pengunjung, bukan server web.
 - Perubahan data memakai server action (`src/app/admin-actions.ts`) yang memeriksa sesi, memanggil
   backend, lalu memperbarui halaman (`revalidatePath`). Isian form tidak hilang bila backend menolak.
-- `src/middleware.ts` mewajibkan login untuk semua halaman kecuali `/login` dan `/pay/*`.
-  Cookie sesi ditandatangani HMAC dengan `SESSION_SECRET` (`src/lib/session.ts`).
-- Login ini sementara sampai login owner + 2FA dibuat di Tahap 3.
+- `src/middleware.ts` mewajibkan cookie sesi untuk semua halaman kecuali `/login` dan `/pay/*`.
+- `Dockerfile` membangun server mandiri Next.js (`output: "standalone"`); lihat `deploy/`.

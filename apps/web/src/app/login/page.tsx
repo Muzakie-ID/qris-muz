@@ -1,13 +1,12 @@
 import type { Metadata } from "next";
 import { QrCode } from "lucide-react";
-import { authConfigured } from "@/lib/session";
 import { LoginForm } from "./login-form";
 
 export const metadata: Metadata = { title: "Masuk", robots: { index: false, follow: false } };
 export const dynamic = "force-dynamic";
 
-export default async function LoginPage({ searchParams }: { searchParams: Promise<{ next?: string }> }) {
-  const { next } = await searchParams;
+export default async function LoginPage({ searchParams }: { searchParams: Promise<{ next?: string; expired?: string }> }) {
+  const { next, expired } = await searchParams;
   return (
     <div className="flex min-h-screen items-center justify-center p-4 text-sm">
       <div className="flex w-full max-w-[380px] flex-col gap-5 rounded-[20px] border border-line bg-surface p-6">
@@ -19,13 +18,11 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
           <h1 className="text-[22px] font-medium tracking-[-0.02em]">Masuk ke dashboard</h1>
           <p className="text-faint">Khusus owner gateway.</p>
         </div>
-        {authConfigured() ? (
-          <LoginForm next={next ?? "/"} />
-        ) : (
-          <p className="rounded-xl bg-warn-bg p-3 text-warn">
-            Login belum disiapkan. Isi DASHBOARD_PASSWORD dan SESSION_SECRET (minimal 24 karakter) di .env web, lalu jalankan ulang.
-          </p>
-        )}
+        {expired && <p className="rounded-xl bg-subtle p-3 text-muted">Sesi berakhir. Silakan masuk lagi.</p>}
+        <LoginForm next={next ?? "/"} />
+        <p className="text-xs text-faint">
+          Belum punya akun owner? Buat di server: <code className="font-mono">node dist/scripts/owner-cli.js create email</code>
+        </p>
       </div>
     </div>
   );

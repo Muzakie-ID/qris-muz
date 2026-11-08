@@ -281,7 +281,7 @@ export class TransactionsService implements OnModuleInit, OnModuleDestroy {
         'transaction.confirm_manual',
         t.id,
         { reason, amount: t.finalAmount },
-        'admin',
+        undefined,
         tx,
       );
       return t;

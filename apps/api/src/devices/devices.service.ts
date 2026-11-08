@@ -8,6 +8,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { and, eq, gt, isNull, lt } from 'drizzle-orm';
+import { esc, NotifierService } from '../alerts/notifier.service';
 import { AuditService } from '../common/audit.service';
 import { randomToken, sha256Hex } from '../common/crypto';
 import { newId } from '../common/ids';
@@ -47,6 +48,7 @@ export class DevicesService implements OnModuleInit, OnModuleDestroy {
     private readonly secrets: SecretsService,
     private readonly qrisSources: QrisSourcesService,
     private readonly audit: AuditService,
+    private readonly notifier: NotifierService,
   ) {}
 
   onModuleInit() {
@@ -152,7 +154,10 @@ export class DevicesService implements OnModuleInit, OnModuleDestroy {
   ) {
     const commands = await this.db.transaction(async (tx) => {
       const [current] = await tx
-        .select({ pending: devices.pendingCommands })
+        .select({
+          pending: devices.pendingCommands,
+          versions: devices.sourceAppVersions,
+        })
         .from(devices)
         .where(eq(devices.id, device.id))
         .for('update');
@@ -174,13 +179,36 @@ export class DevicesService implements OnModuleInit, OnModuleDestroy {
           pendingCommands: [],
         })
         .where(eq(devices.id, device.id));
-      return current?.pending ?? [];
+      return { pending: current?.pending ?? [], versions: current?.versions };
     });
+    await this.alertVersionChange(
+      device.name,
+      commands.versions ?? null,
+      input.source_app_versions ?? null,
+    );
     return {
       server_time: Date.now(),
       next_heartbeat_sec: HEARTBEAT_INTERVAL_SEC,
-      commands,
+      commands: commands.pending,
     };
+  }
+
+  /** Versi aplikasi sumber berubah (mis. DANA Bisnis ter-update): format notifikasi bisa ikut berubah. */
+  private async alertVersionChange(
+    deviceName: string,
+    before: Record<string, string> | null,
+    after: Record<string, string> | null,
+  ) {
+    if (!before || !after) return;
+    for (const [pkg, ver] of Object.entries(after)) {
+      const old = before[pkg];
+      if (old && old !== ver) {
+        await this.notifier.notify(
+          'app_version',
+          `🟡 <b>Aplikasi sumber ter-update</b> di ${esc(deviceName)}\n${esc(pkg)}: ${esc(old)} → ${esc(ver)}\nKirim pembayaran uji untuk memastikan notifikasinya masih terbaca.`,
+        );
+      }
+    }
   }
 
   /** Menitipkan perintah untuk listener; dijalankan saat heartbeat berikutnya (≤ 1 menit). */

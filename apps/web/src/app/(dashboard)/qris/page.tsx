@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { unstable_rethrow } from "next/navigation";
 import { Plus, QrCode } from "lucide-react";
 import { createQrisAction, toggleQrisAction, updateQrisAction } from "@/app/admin-actions";
 import { ActionForm, SubmitButton } from "@/components/admin/action-form";
@@ -13,7 +14,10 @@ export const metadata: Metadata = { title: "QRIS" };
 export const dynamic = "force-dynamic";
 
 export default async function QrisPage() {
-  const [sources, devices] = await Promise.all([listQrisSources(), listDevices().catch(() => null)]);
+  const [sources, devices] = await Promise.all([listQrisSources(), listDevices().catch((e: unknown) => {
+      unstable_rethrow(e);
+      return null;
+    })]);
   // Saran package dari aplikasi sumber yang dilaporkan HP listener.
   const packages = Array.from(
     new Set((devices?.devices ?? []).flatMap((d) => Object.keys(d.source_app_versions ?? {}))),

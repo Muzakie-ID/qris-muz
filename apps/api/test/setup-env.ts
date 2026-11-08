@@ -17,3 +17,7 @@ process.env.QRIS_STATIC_PAYLOAD = E2E_STATIC_QRIS;
 process.env.QRIS_TOOLS_ENABLED = 'true';
 process.env.QRIS_MAX_AMOUNT = '10000000';
 process.env.UNIQUE_CODE_GRACE_HOURS = '24';
+process.env.RATE_LIMIT_ENABLED = 'false';
+/** Server Telegram tiruan dijalankan test di port ini. */
+export const E2E_TELEGRAM_PORT = 39123;
+process.env.TELEGRAM_API_URL = `http://127.0.0.1:${E2E_TELEGRAM_PORT}`;

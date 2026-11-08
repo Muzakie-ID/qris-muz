@@ -12,6 +12,7 @@ import {
   transactions,
 } from '../db/schema';
 import { QrisSourcesService } from '../qris/qris-sources.service';
+import { esc, NotifierService } from '../alerts/notifier.service';
 import { WebhooksService } from '../webhooks/webhooks.service';
 import { parseNotification, type ParserRule } from './parser';
 
@@ -57,6 +58,7 @@ export class PaymentsService {
     private readonly qrisSources: QrisSourcesService,
     private readonly webhooks: WebhooksService,
     private readonly events: TransactionEvents,
+    private readonly notifier: NotifierService,
   ) {}
 
   /**
@@ -225,12 +227,35 @@ export class PaymentsService {
         })
         .onConflictDoNothing({ target: paymentEvents.hash })
         .returning();
-      if (!row) return { inserted: false, changed: null };
+      if (!row) return { inserted: false, changed: null, id: null };
       const changed = await this.parseAndMatch(tx, row, rules, allowed);
-      return { inserted: true, changed };
+      return { inserted: true, changed, id: row.id };
     });
     if (result.changed) this.events.emit(result.changed);
+    else if (result.id) await this.alertIfNeedsReview(result.id);
     return result.inserted;
+  }
+
+  /** Alarm untuk notifikasi baru yang tak terbaca parser atau tak cocok dengan tagihan mana pun. */
+  private async alertIfNeedsReview(eventId: string) {
+    const e = await this.db.query.paymentEvents.findFirst({
+      where: eq(paymentEvents.id, eventId),
+    });
+    if (!e || e.isTest) return;
+    const body = esc(
+      [e.title, e.text ?? e.bigText].filter(Boolean).join(' · '),
+    );
+    if (e.parseStatus === 'UNPARSED') {
+      await this.notifier.notify(
+        'unparsed',
+        `🟠 <b>Notifikasi tak terbaca</b> dari ${esc(e.packageName)}\n${body}\nPerbaiki pola di halaman Parser lalu proses ulang.`,
+      );
+    } else if (e.matchStatus === 'UNMATCHED' && e.parsedAmount !== null) {
+      await this.notifier.notify(
+        'unmatched',
+        `🟠 <b>Dana masuk Rp${e.parsedAmount.toLocaleString('id-ID')} tidak cocok</b> dengan tagihan mana pun\n${body}\nCek Mutasi masuk; konfirmasi manual bila perlu.`,
+      );
+    }
   }
 
   /** Mengisi hasil baca dan pencocokan satu event. Mengembalikan transaksi yang berubah status. */

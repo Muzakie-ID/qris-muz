@@ -1,7 +1,9 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  // Server mandiri yang kecil untuk image Docker (lihat Dockerfile).
+  output: "standalone",
+  poweredByHeader: false,
 };
 
 export default nextConfig;

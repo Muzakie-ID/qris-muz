@@ -9,6 +9,8 @@ import {
   Max,
   MaxLength,
   Min,
+  IsObject,
+  Matches,
   ValidateIf,
 } from 'class-validator';
 import { Type } from 'class-transformer';
@@ -144,4 +146,23 @@ export class TestParserDto {
   @IsOptional() @IsString() @MaxLength(500) title?: string;
   @IsString() @IsNotEmpty() @MaxLength(2000) text!: string;
   @IsOptional() @IsString() @MaxLength(500) pattern?: string;
+}
+
+export class UpdateTelegramDto {
+  @IsOptional() @IsBoolean() enabled?: boolean;
+  /** Format token BotFather: <angka>:<35 karakter>. */
+  @IsOptional()
+  @ValidateIf((_, v) => v !== null)
+  @Matches(/^\d{5,15}:[A-Za-z0-9_-]{30,60}$/, {
+    message:
+      'Token bot tidak valid. Salin persis dari BotFather (angka:huruf).',
+  })
+  bot_token?: string | null;
+  @IsOptional()
+  @ValidateIf((_, v) => v !== null)
+  @Matches(/^(-?\d{1,20}|@[A-Za-z0-9_]{5,32})$/, {
+    message: 'Chat ID berupa angka (boleh diawali -) atau @nama_channel.',
+  })
+  chat_id?: string | null;
+  @IsOptional() @IsObject() categories?: Record<string, boolean>;
 }

@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { unstable_rethrow } from "next/navigation";
 import {
   ApiError,
   createApiKey,
@@ -8,7 +9,15 @@ import {
   createParser,
   createProject,
   createQrisSource,
+  changePassword,
+  NOTIFY_CATEGORIES,
   reprocessEvents,
+  revokeOwnerSession,
+  testTelegram,
+  totpDisable,
+  totpEnable,
+  totpSetup,
+  updateTelegram,
   retryWebhookDelivery,
   revokeApiKey,
   revokeDevice,
@@ -30,6 +39,7 @@ export interface ActionResult {
   secret?: { label: string; value: string };
   pairing?: PairingToken;
   parserTest?: ParserTestResult;
+  totp?: { secret: string; otpauth_uri: string };
   at?: number;
 }
 
@@ -42,6 +52,7 @@ async function run(path: string | string[], fn: () => Promise<Outcome>): Promise
     for (const p of Array.isArray(path) ? path : [path]) revalidatePath(p);
     return { error: null, ...out, at: Date.now() };
   } catch (e) {
+    unstable_rethrow(e); // mis. pengalihan ke /login saat sesi berakhir
     return {
       error: e instanceof ApiError || e instanceof FormError ? e.message : "Terjadi kesalahan. Coba lagi.",
       at: Date.now(),
@@ -233,5 +244,63 @@ export async function reprocessEventsAction() {
           ? "Tidak ada mutasi yang perlu diproses ulang."
           : `${r.processed} mutasi diproses ulang, ${r.matched} cocok dengan transaksi.`,
     };
+  });
+}
+
+// --- Pengaturan: akun, 2FA, sesi ---
+
+export async function changePasswordAction(_: ActionResult, form: FormData) {
+  return run("/pengaturan", async () => {
+    const next = String(form.get("new_password") ?? "");
+    if (next !== String(form.get("confirm_password") ?? "")) throw new FormError("Ulangi password baru dengan sama persis.");
+    await changePassword(String(form.get("current_password") ?? ""), next);
+    return { message: "Password diganti. Sesi di perangkat lain sudah dikeluarkan." };
+  });
+}
+
+export async function totpSetupAction() {
+  return run([], async () => ({ totp: await totpSetup() }));
+}
+
+export async function totpEnableAction(_: ActionResult, form: FormData) {
+  return run(["/pengaturan", "/"], async () => {
+    await totpEnable(required(form, "code", "Kode").replace(/\s/g, ""));
+    return { message: "2FA aktif. Login berikutnya meminta kode dari aplikasi authenticator." };
+  });
+}
+
+export async function totpDisableAction(_: ActionResult, form: FormData) {
+  return run(["/pengaturan", "/"], async () => {
+    await totpDisable(String(form.get("password") ?? ""), required(form, "code", "Kode").replace(/\s/g, ""));
+    return { message: "2FA dimatikan." };
+  });
+}
+
+export async function revokeSessionAction(_: ActionResult, form: FormData) {
+  return run("/pengaturan", async () => {
+    await revokeOwnerSession(required(form, "session_id", "Sesi"));
+  });
+}
+
+// --- Pengaturan: Telegram ---
+
+export async function updateTelegramAction(_: ActionResult, form: FormData) {
+  return run("/pengaturan", async () => {
+    const token = text(form, "bot_token");
+    await updateTelegram({
+      // Kosong = token lama tetap dipakai.
+      ...(token && { bot_token: token }),
+      chat_id: nullable(form, "chat_id"),
+      enabled: checked(form, "enabled"),
+      categories: Object.fromEntries(NOTIFY_CATEGORIES.map((c) => [c, checked(form, `cat_${c}`)])),
+    });
+    return { message: "Pengaturan Telegram disimpan." };
+  });
+}
+
+export async function testTelegramAction() {
+  return run([], async () => {
+    await testTelegram();
+    return { message: "Pesan uji terkirim. Cek chat Telegram Anda." };
   });
 }
