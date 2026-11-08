@@ -22,7 +22,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
     }),
   ]);
   return (
-    <div className="flex min-h-screen flex-col gap-3 p-3 text-sm lg:flex-row lg:items-start">
+    <div className="flex min-h-svh flex-col gap-3 p-3 text-sm lg:flex-row lg:items-start">
       <Sidebar
         unreadEvents={status.unread}
         listenerOnline={status.online}

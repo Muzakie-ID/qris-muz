@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 export default async function LoginPage({ searchParams }: { searchParams: Promise<{ next?: string; expired?: string }> }) {
   const { next, expired } = await searchParams;
   return (
-    <div className="flex min-h-screen items-center justify-center p-4 text-sm">
+    <div className="flex min-h-svh items-center justify-center p-4 text-sm">
       <div className="flex w-full max-w-[380px] flex-col gap-5 rounded-[20px] border border-line bg-surface p-6">
         <div className="flex items-center gap-2">
           <QrCode className="size-[22px]" strokeWidth={2} aria-hidden />
