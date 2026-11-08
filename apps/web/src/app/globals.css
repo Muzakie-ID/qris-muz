@@ -30,6 +30,23 @@ body {
   background: var(--color-canvas);
   color: var(--color-ink);
   font-family: var(--font-sans);
+  /* Menjauh dari notch dan bilah sistem; bernilai 0 di perangkat yang tidak punya. */
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom)
+    env(safe-area-inset-left);
+  /* Mematikan zoom dua-ketuk yang tidak disengaja. Cubit untuk memperbesar tetap bisa. */
+  touch-action: manipulation;
+}
+
+/*
+ * Browser HP memperbesar seluruh halaman saat fokus ke isian yang fontnya di bawah 16px,
+ * dan tidak mengecilkannya lagi. Jadi di layar kecil semua isian dibuat 16px.
+ */
+@media (max-width: 767px) {
+  input:not([type="checkbox"]):not([type="radio"]),
+  select:not([hidden]),
+  textarea:not([hidden]) {
+    font-size: 16px;
+  }
 }
 
 /* Animasi landing page (demo pembayaran). Dimatikan bila pengguna memilih kurangi gerakan. */

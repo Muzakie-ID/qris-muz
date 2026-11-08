@@ -98,7 +98,7 @@ export function CheckoutView({ initial, apiUrl }: { initial: CheckoutData; apiUr
   const back = initial.return_url;
 
   return (
-    <div className="mx-auto flex min-h-screen w-full max-w-[420px] flex-col gap-3 p-4">
+    <div className="mx-auto flex min-h-svh w-full max-w-[420px] flex-col gap-3 p-4">
       <header className="flex items-center justify-between px-1 pt-1">
         <div className="flex items-center gap-2.5">
           <span className="flex size-9 items-center justify-center rounded-[10px] bg-ink font-semibold text-white">

@@ -223,7 +223,7 @@ export function Sidebar({ unreadEvents, listenerOnline, ownerEmail, totpEnabled 
       {/* Sidebar desktop */}
       <aside
         className={cn(
-          "sticky top-3 hidden h-[calc(100vh-24px)] shrink-0 overflow-y-auto transition-[width] lg:block",
+          "sticky top-3 hidden h-[calc(100svh-24px)] shrink-0 overflow-y-auto transition-[width] lg:block",
           collapsed ? "w-[76px]" : "w-64",
         )}
       >

@@ -53,5 +53,10 @@ Tombol **Buat transaksi uji** membuat tagihan Rp1.000 sungguhan di proyek pertam
   daftar sesi memakai data pengunjung, bukan server web.
 - Perubahan data memakai server action (`src/app/admin-actions.ts`) yang memeriksa sesi, memanggil
   backend, lalu memperbarui halaman (`revalidatePath`). Isian form tidak hilang bila backend menolak.
+- Di HP: tinggi halaman memakai `svh` (bukan `vh`) agar tidak ada scroll sisa di balik bilah alamat,
+  `theme-color` menyamakan warna bilah Chrome dengan kanvas, `body` memakai `env(safe-area-inset-*)`
+  untuk notch, `touch-action: manipulation` mematikan zoom dua-ketuk, dan semua isian form dibuat 16px
+  di bawah 768px supaya browser tidak memperbesar halaman sendiri saat isian difokuskan. Cubit untuk
+  memperbesar tetap diizinkan.
 - `src/middleware.ts` mewajibkan cookie sesi untuk semua halaman kecuali `/`, `/docs`, `/login`, dan `/pay/*`.
 - `Dockerfile` membangun server mandiri Next.js (`output: "standalone"`); lihat `deploy/`.
