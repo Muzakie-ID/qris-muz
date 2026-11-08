@@ -2,16 +2,17 @@ import {
   Inject,
   Injectable,
   Logger,
+  NotFoundException,
   OnModuleDestroy,
   OnModuleInit,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { and, asc, eq, inArray, lte } from 'drizzle-orm';
+import { and, asc, count, desc, eq, inArray, lte } from 'drizzle-orm';
 import { hmacSha256Hex } from '../common/crypto';
 import { newId } from '../common/ids';
 import type { Env } from '../config/env';
 import { DB, type Db, type DbOrTx } from '../db/db.module';
-import { projects, webhookDeliveries } from '../db/schema';
+import { projects, transactions, webhookDeliveries } from '../db/schema';
 import { ProjectsService } from '../projects/projects.service';
 import {
   toApiView,
@@ -204,6 +205,67 @@ export class WebhooksService implements OnModuleInit, OnModuleDestroy {
       );
   }
 
+  /** Log semua pengiriman webhook, terbaru dulu, untuk dashboard. */
+  async list(q: {
+    status?: 'PENDING' | 'DELIVERED' | 'FAILED';
+    page: number;
+    perPage: number;
+  }) {
+    const where = q.status ? eq(webhookDeliveries.status, q.status) : undefined;
+    const [items, [{ total }], grouped] = await Promise.all([
+      this.db
+        .select({
+          d: webhookDeliveries,
+          projectName: projects.name,
+          webhookUrl: projects.webhookUrl,
+          merchantRef: transactions.merchantRef,
+        })
+        .from(webhookDeliveries)
+        .innerJoin(projects, eq(projects.id, webhookDeliveries.projectId))
+        .innerJoin(
+          transactions,
+          eq(transactions.id, webhookDeliveries.transactionId),
+        )
+        .where(where)
+        .orderBy(desc(webhookDeliveries.createdAt))
+        .limit(q.perPage)
+        .offset((q.page - 1) * q.perPage),
+      this.db.select({ total: count() }).from(webhookDeliveries).where(where),
+      this.db
+        .select({ status: webhookDeliveries.status, n: count() })
+        .from(webhookDeliveries)
+        .groupBy(webhookDeliveries.status),
+    ]);
+    const counts = { ALL: 0, PENDING: 0, DELIVERED: 0, FAILED: 0 };
+    for (const g of grouped) {
+      counts[g.status] = g.n;
+      counts.ALL += g.n;
+    }
+    return {
+      items: items.map(({ d, projectName, webhookUrl, merchantRef }) => ({
+        id: d.id,
+        event_id: d.eventId,
+        event_type: d.eventType,
+        project_name: projectName,
+        webhook_url: webhookUrl,
+        transaction_id: d.transactionId,
+        merchant_ref: merchantRef,
+        status: d.status,
+        attempt: d.attempt,
+        last_status_code: d.lastStatusCode,
+        last_error: d.lastError,
+        next_retry_at:
+          d.status === 'PENDING' ? d.nextRetryAt.toISOString() : null,
+        delivered_at: d.deliveredAt?.toISOString() ?? null,
+        created_at: d.createdAt.toISOString(),
+      })),
+      total,
+      page: q.page,
+      per_page: q.perPage,
+      counts,
+    };
+  }
+
   /** Riwayat pengiriman webhook satu transaksi. */
   listForTransaction(transactionId: string) {
     return this.db.query.webhookDeliveries.findMany({
@@ -214,9 +276,12 @@ export class WebhooksService implements OnModuleInit, OnModuleDestroy {
 
   /** Menjadwalkan kirim ulang segera (dari dashboard/admin). */
   async retryNow(deliveryId: string): Promise<void> {
-    await this.db
+    const rows = await this.db
       .update(webhookDeliveries)
       .set({ status: 'PENDING', nextRetryAt: new Date() })
-      .where(eq(webhookDeliveries.id, deliveryId));
+      .where(eq(webhookDeliveries.id, deliveryId))
+      .returning({ id: webhookDeliveries.id });
+    if (rows.length === 0)
+      throw new NotFoundException('Pengiriman webhook tidak ditemukan.');
   }
 }

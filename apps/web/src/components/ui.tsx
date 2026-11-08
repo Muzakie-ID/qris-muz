@@ -3,14 +3,23 @@ import { ArrowRight } from "lucide-react";
 import { TestPaymentButton } from "@/components/test-payment-button";
 import { cn } from "@/lib/cn";
 
-export function PageHeader({ title, description }: { title: string; description: string }) {
+/** `action` menggantikan tombol transaksi uji; null untuk tanpa tombol. */
+export function PageHeader({
+  title,
+  description,
+  action,
+}: {
+  title: string;
+  description: string;
+  action?: React.ReactNode;
+}) {
   return (
     <header className="flex flex-wrap items-center justify-between gap-4">
       <div className="flex flex-col gap-1">
         <h1 className="text-[28px] font-medium tracking-[-0.03em]">{title}</h1>
         <p className="text-faint">{description}</p>
       </div>
-      <TestPaymentButton />
+      {action === undefined ? <TestPaymentButton /> : action}
     </header>
   );
 }

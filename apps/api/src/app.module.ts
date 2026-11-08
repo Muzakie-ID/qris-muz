@@ -11,6 +11,7 @@ import { DeviceSignatureGuard } from './devices/device-signature.guard';
 import { DevicesController } from './devices/devices.controller';
 import { DevicesService } from './devices/devices.service';
 import { HealthController } from './health.controller';
+import { ParsersService } from './payments/parsers.service';
 import { PaymentsService } from './payments/payments.service';
 import { ProjectsModule } from './projects/projects.module';
 import { QrisModule } from './qris/qris.module';
@@ -39,6 +40,7 @@ import { WebhooksModule } from './webhooks/webhooks.module';
   providers: [
     TransactionsService,
     PaymentsService,
+    ParsersService,
     DevicesService,
     DeviceSignatureGuard,
     AdminGuard,

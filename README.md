@@ -124,13 +124,13 @@ qris-muz/
 | Tahap | Isi | Status |
 |---|---|---|
 | 1. Core QRIS | Konversi statis → dinamis, CRC16, gambar QR, alat uji | Selesai. Gerbang uji scan di e-wallet menunggu QRIS asli |
-| 2. MVP otomatis | API transaksi, multi-QRIS, API device, parser, pencocokan, webhook, checkout SSE, aplikasi listener, dashboard dan halaman bayar tersambung ke API | Selesai di kode, teruji otomatis. Uji pembayaran sungguhan menunggu deploy |
-| 3. Produksi | Deploy VPS, login owner + 2FA (sekarang password sementara), notifikasi Telegram, rate limiting, backup, halaman Proyek/Perangkat/QRIS/Parser di dashboard | Belum |
+| 2. MVP otomatis | API transaksi, multi-QRIS, API device, parser, pencocokan, webhook, checkout SSE, aplikasi listener, dashboard lengkap (Beranda, Transaksi, Mutasi, Proyek, Perangkat, QRIS, Parser, Log webhook) dan halaman bayar tersambung ke API | Selesai di kode, teruji otomatis. Uji pembayaran sungguhan menunggu deploy |
+| 3. Produksi | Deploy VPS, login owner + 2FA (sekarang password sementara), notifikasi Telegram, rate limiting, backup, halaman Pengaturan | Belum |
 | 4. Penyempurnaan | Fitur Fase 2: rekonsiliasi, sandbox, statistik, HP cadangan, pengumuman suara, dll. | Belum |
 
-Dashboard (Beranda, Transaksi) dan halaman bayar sudah memakai data asli dari backend. Halaman
-Proyek, Perangkat, QRIS, Parser, dan Log webhook di dashboard masih menyusul; untuk sementara
-pengelolaannya lewat endpoint admin.
+Semua halaman dashboard dan halaman bayar memakai data asli dari backend. Pengelolaan proyek, API
+key, HP listener, QRIS, parser, dan webhook bisa dilakukan dari dashboard; hanya halaman Pengaturan
+(akun owner, 2FA, Telegram, backup) yang masih menyusul.
 
 ## Mulai cepat (lokal)
 
@@ -183,7 +183,18 @@ echo "sdk.dir=/path/ke/android-sdk" > local.properties
 
 ## Menyiapkan gateway pertama kali
 
-Sampai login owner dibuat (Tahap 3), pengelolaan memakai `ADMIN_TOKEN`:
+Lewat dashboard (masuk dengan `DASHBOARD_PASSWORD`):
+
+1. **QRIS** → Tambah QRIS: tempel teks hasil scan QRIS statis (diawali `000201`), beri label, isi
+   package aplikasi merchant bila sudah tahu.
+2. **Proyek & API key** → Proyek baru: isi URL webhook dan return URL. Salin **webhook secret** yang
+   muncul (hanya ditampilkan sekali), lalu tekan **API key baru** dan salin key-nya.
+3. **Perangkat** → Tambah perangkat → Buat kode pairing, lalu di aplikasi listener tekan **Scan QR
+   pairing**.
+4. Tekan **Buat transaksi uji** di Beranda, bayar Rp1.000-an itu, dan lihat statusnya berubah di
+   **Mutasi masuk** dan **Transaksi**.
+
+Hal yang sama bisa dilakukan dengan endpoint admin dan `ADMIN_TOKEN`:
 
 ```bash
 H="Authorization: Bearer $ADMIN_TOKEN"; J='Content-Type: application/json'
@@ -206,7 +217,7 @@ curl -X POST localhost:3001/admin/devices/pairing-tokens -H "$H" -H "$J" \
 ```
 
 Nama package aplikasi merchant bisa dikosongkan dulu, lalu diisi setelah diketahui lewat **Mode
-deteksi** di aplikasi listener (`PATCH /admin/qris-sources/:id`).
+deteksi** di aplikasi listener (tombol **Ubah** di halaman QRIS, atau `PATCH /admin/qris-sources/:id`).
 
 Daftar lengkap endpoint admin ada di [apps/api/README.md](apps/api/README.md#admin-header-authorization-bearer-admin_token).
 
@@ -373,8 +384,8 @@ Variabel lingkungan backend (lihat [apps/api/.env.example](apps/api/.env.example
   Notifikasi yang tertangkap tetap terkirim dari antrian. `GET /v1/status` memberi tahu proyek saat
   konfirmasi sedang tertunda.
 - **Format notifikasi bisa berubah** setelah DANA Bisnis atau GoPay Merchant diperbarui. Teks
-  mentah selalu disimpan, sehingga pola parser bisa diperbaiki lalu event diproses ulang
-  (`POST /admin/events/reprocess`).
+  mentah selalu disimpan, sehingga pola parser bisa diuji dan diperbaiki di halaman **Parser**, lalu
+  mutasi diproses ulang (tombol **Proses ulang**, atau `POST /admin/events/reprocess`).
 - **QR tidak bisa kedaluwarsa di sisi bank/e-wallet.** Setelah tagihan kedaluwarsa, QR disembunyikan
   dari halaman bayar, tetapi pembeli yang sudah menyimpan QR masih bisa membayar. Pembayaran itu
   dicatat sebagai `LATE_PAID`.
@@ -384,6 +395,5 @@ Variabel lingkungan backend (lihat [apps/api/.env.example](apps/api/.env.example
 
 1. Deploy ke VPS (Docker Compose + Caddy untuk HTTPS) dan uji pembayaran sungguhan dari HP listener.
 2. Login owner dengan 2FA, menggantikan `ADMIN_TOKEN`.
-3. Halaman Proyek, Perangkat (pairing dengan QR), QRIS, Parser, dan Log webhook di dashboard.
-4. Notifikasi Telegram (pembayaran masuk, listener offline, notifikasi tak terbaca), rate limiting,
+3. Notifikasi Telegram (pembayaran masuk, listener offline, notifikasi tak terbaca), rate limiting,
    dan backup harian `pg_dump` ke Google Drive lewat rclone.

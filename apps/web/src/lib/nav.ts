@@ -23,15 +23,15 @@ export interface NavItem {
 export const MAIN_NAV: NavItem[] = [
   { href: "/", label: "Beranda", icon: House, ready: true, description: "Ringkasan pembayaran dari semua proyek." },
   { href: "/transaksi", label: "Transaksi", icon: ReceiptText, ready: true, description: "Semua tagihan yang dibuat proyek lewat API." },
-  { href: "/mutasi", label: "Mutasi masuk", icon: Inbox, ready: false, description: "Notifikasi dana masuk mentah dari HP listener, termasuk yang belum terbaca parser." },
-  { href: "/proyek", label: "Proyek & API key", icon: Folder, ready: false, description: "Daftar proyek, API key, URL webhook, dan return URL default." },
+  { href: "/mutasi", label: "Mutasi masuk", icon: Inbox, ready: true, description: "Notifikasi dana masuk mentah dari HP listener, termasuk yang belum terbaca parser." },
+  { href: "/proyek", label: "Proyek & API key", icon: Folder, ready: true, description: "Daftar proyek, API key, URL webhook, dan return URL default." },
 ];
 
 export const SYSTEM_NAV: NavItem[] = [
-  { href: "/perangkat", label: "Perangkat", icon: Smartphone, ready: false, description: "HP listener yang terhubung, heartbeat, dan pairing perangkat baru." },
-  { href: "/qris", label: "QRIS", icon: QrCode, ready: false, description: "Upload dan kelola QRIS statis yang dipakai untuk membuat QR dinamis." },
-  { href: "/parser", label: "Parser", icon: Braces, ready: false, description: "Pola pembaca notifikasi per aplikasi dan event yang gagal dibaca." },
-  { href: "/webhook", label: "Log webhook", icon: Webhook, ready: false, description: "Riwayat pengiriman webhook ke proyek, termasuk retry yang gagal." },
+  { href: "/perangkat", label: "Perangkat", icon: Smartphone, ready: true, description: "HP listener yang terhubung, heartbeat, dan pairing perangkat baru." },
+  { href: "/qris", label: "QRIS", icon: QrCode, ready: true, description: "Upload dan kelola QRIS statis yang dipakai untuk membuat QR dinamis." },
+  { href: "/parser", label: "Parser", icon: Braces, ready: true, description: "Pola pembaca notifikasi per aplikasi dan event yang gagal dibaca." },
+  { href: "/webhook", label: "Log webhook", icon: Webhook, ready: true, description: "Riwayat pengiriman webhook ke proyek, termasuk retry yang gagal." },
 ];
 
 export const PLACEHOLDER_SECTIONS = [...MAIN_NAV, ...SYSTEM_NAV, {

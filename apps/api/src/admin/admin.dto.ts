@@ -90,3 +90,58 @@ export class TestTransactionDto {
   @IsInt() @Min(1) @Max(1_000_000) amount!: number;
   @IsOptional() @IsString() project_id?: string;
 }
+
+export class PageQueryDto {
+  @IsOptional() @Type(() => Number) @IsInt() @Min(1) page?: number;
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(100)
+  per_page?: number;
+}
+
+export class ListPaymentEventsQueryDto extends PageQueryDto {
+  @IsOptional() @IsIn(['PARSED', 'UNPARSED', 'IGNORED']) parse_status?:
+    'PARSED' | 'UNPARSED' | 'IGNORED';
+  @IsOptional()
+  @IsIn(['PENDING', 'MATCHED', 'LATE_MATCHED', 'UNMATCHED', 'NOT_APPLICABLE'])
+  match_status?:
+    'PENDING' | 'MATCHED' | 'LATE_MATCHED' | 'UNMATCHED' | 'NOT_APPLICABLE';
+}
+
+export class ListWebhookDeliveriesQueryDto extends PageQueryDto {
+  @IsOptional() @IsIn(['PENDING', 'DELIVERED', 'FAILED']) status?:
+    'PENDING' | 'DELIVERED' | 'FAILED';
+}
+
+export class CreateParserDto {
+  @IsOptional()
+  @ValidateIf((_, v) => v !== null)
+  @IsString()
+  @MaxLength(200)
+  package_name?: string | null;
+  @IsString() @IsNotEmpty() @MaxLength(500) pattern!: string;
+  @IsOptional() @IsInt() @Min(0) @Max(10_000) priority?: number;
+  @IsOptional() @IsBoolean() auto_match?: boolean;
+  @IsOptional() @IsBoolean() is_active?: boolean;
+}
+
+export class UpdateParserDto {
+  @IsOptional()
+  @ValidateIf((_, v) => v !== null)
+  @IsString()
+  @MaxLength(200)
+  package_name?: string | null;
+  @IsOptional() @IsString() @IsNotEmpty() @MaxLength(500) pattern?: string;
+  @IsOptional() @IsInt() @Min(0) @Max(10_000) priority?: number;
+  @IsOptional() @IsBoolean() auto_match?: boolean;
+  @IsOptional() @IsBoolean() is_active?: boolean;
+}
+
+export class TestParserDto {
+  @IsOptional() @IsString() @MaxLength(200) package_name?: string;
+  @IsOptional() @IsString() @MaxLength(500) title?: string;
+  @IsString() @IsNotEmpty() @MaxLength(2000) text!: string;
+  @IsOptional() @IsString() @MaxLength(500) pattern?: string;
+}

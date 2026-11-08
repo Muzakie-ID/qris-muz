@@ -13,6 +13,7 @@ import {
 import { AuditService } from '../common/audit.service';
 import { DeviceCommandDto, PairingTokenDto } from '../devices/devices.dto';
 import { DevicesService } from '../devices/devices.service';
+import { ParsersService, type ParserRow } from '../payments/parsers.service';
 import { PaymentsService } from '../payments/payments.service';
 import { ProjectsService, type Project } from '../projects/projects.service';
 import {
@@ -25,11 +26,16 @@ import { WebhooksService } from '../webhooks/webhooks.service';
 import { AdminGuard } from './admin.guard';
 import { DashboardService } from './dashboard.service';
 import {
+  CreateParserDto,
   CreateProjectDto,
   CreateQrisSourceDto,
   ListEventsQuery,
+  ListPaymentEventsQueryDto,
   ListTransactionsQueryDto,
+  ListWebhookDeliveriesQueryDto,
+  TestParserDto,
   TestTransactionDto,
+  UpdateParserDto,
   UpdateProjectDto,
   UpdateQrisSourceDto,
 } from './admin.dto';
@@ -58,6 +64,20 @@ function qrisView(q: QrisSource) {
   };
 }
 
+function parserView(r: ParserRow) {
+  return {
+    id: r.id,
+    package_name: r.packageName,
+    pattern: r.pattern,
+    priority: r.priority,
+    auto_match: r.autoMatch,
+    is_active: r.isActive,
+    updated_at: r.updatedAt.toISOString(),
+  };
+}
+
+const iso = (d: Date | null) => d?.toISOString() ?? null;
+
 /** Pengelolaan oleh owner. Nanti dipakai dashboard; sementara diakses dengan ADMIN_TOKEN. */
 @Controller('admin')
 @UseGuards(AdminGuard)
@@ -71,6 +91,7 @@ export class AdminController {
     private readonly webhooks: WebhooksService,
     private readonly audit: AuditService,
     private readonly dashboard: DashboardService,
+    private readonly parsers: ParsersService,
   ) {}
 
   // --- Dashboard ---
@@ -193,6 +214,18 @@ export class AdminController {
     };
   }
 
+  /** Daftar API key proyek; key asli tidak pernah ditampilkan lagi, hanya prefix. */
+  @Get('projects/:id/api-keys')
+  async listApiKeys(@Param('id') id: string) {
+    return (await this.projects.listApiKeys(id)).map((k) => ({
+      id: k.id,
+      prefix: k.prefix,
+      last_used_at: iso(k.lastUsedAt),
+      revoked_at: iso(k.revokedAt),
+      created_at: k.createdAt.toISOString(),
+    }));
+  }
+
   @Post('api-keys/:id/revoke')
   @HttpCode(204)
   async revokeApiKey(@Param('id') id: string) {
@@ -205,7 +238,23 @@ export class AdminController {
   async listDevices() {
     return {
       status: await this.devices.listenerStatus(),
-      devices: await this.devices.list(),
+      devices: (await this.devices.list()).map((d) => ({
+        id: d.id,
+        name: d.name,
+        last_heartbeat_at: iso(d.lastHeartbeatAt),
+        listener_ok: d.listenerOk,
+        battery: d.battery,
+        charging: d.charging,
+        queued: d.queued,
+        source_app_versions: d.sourceAppVersions,
+        clock_skew_ms: d.clockSkewMs,
+        app_version: d.appVersion,
+        last_crash: d.lastCrash,
+        last_crash_at: iso(d.lastCrashAt),
+        pending_commands: d.pendingCommands,
+        revoked_at: iso(d.revokedAt),
+        created_at: d.createdAt.toISOString(),
+      })),
     };
   }
 
@@ -242,10 +291,65 @@ export class AdminController {
     return this.webhooks.listForTransaction(id);
   }
 
+  /** Log semua pengiriman webhook untuk halaman Log webhook. */
+  @Get('webhook-deliveries')
+  listWebhookDeliveries(@Query() q: ListWebhookDeliveriesQueryDto) {
+    return this.webhooks.list({
+      status: q.status,
+      page: q.page ?? 1,
+      perPage: q.per_page ?? 20,
+    });
+  }
+
   @Post('webhook-deliveries/:id/retry')
   @HttpCode(204)
-  retryWebhook(@Param('id') id: string) {
-    return this.webhooks.retryNow(id);
+  async retryWebhook(@Param('id') id: string) {
+    await this.webhooks.retryNow(id);
+    await this.audit.log('webhook.retry_requested', id);
+  }
+
+  // --- Parser ---
+  @Get('parsers')
+  async listParsers() {
+    return (await this.parsers.list()).map(parserView);
+  }
+
+  @Post('parsers')
+  async createParser(@Body() dto: CreateParserDto) {
+    const r = await this.parsers.create({
+      packageName: dto.package_name,
+      pattern: dto.pattern,
+      priority: dto.priority,
+      autoMatch: dto.auto_match,
+      isActive: dto.is_active,
+    });
+    await this.audit.log('parser.created', r.id, { ...dto });
+    return parserView(r);
+  }
+
+  /** Mencoba teks notifikasi terhadap satu pola, atau semua parser aktif bila pola kosong. */
+  @Post('parsers/test')
+  @HttpCode(200)
+  testParser(@Body() dto: TestParserDto) {
+    return this.parsers.test({
+      packageName: dto.package_name,
+      title: dto.title,
+      text: dto.text,
+      pattern: dto.pattern,
+    });
+  }
+
+  @Patch('parsers/:id')
+  async updateParser(@Param('id') id: string, @Body() dto: UpdateParserDto) {
+    const r = await this.parsers.update(id, {
+      packageName: dto.package_name,
+      pattern: dto.pattern,
+      priority: dto.priority,
+      autoMatch: dto.auto_match,
+      isActive: dto.is_active,
+    });
+    await this.audit.log('parser.updated', id, { ...dto });
+    return parserView(r);
   }
 
   @Get('events')
@@ -253,6 +357,17 @@ export class AdminController {
     return this.payments.listEvents({
       parseStatus: q.parse_status,
       matchStatus: q.match_status,
+    });
+  }
+
+  /** Mutasi masuk untuk dashboard (berhalaman, snake_case). */
+  @Get('payment-events')
+  listPaymentEvents(@Query() q: ListPaymentEventsQueryDto) {
+    return this.payments.listPage({
+      parseStatus: q.parse_status,
+      matchStatus: q.match_status,
+      page: q.page ?? 1,
+      perPage: q.per_page ?? 20,
     });
   }
 

@@ -47,8 +47,26 @@ async function request<T>(path: string, init: RequestInit & { admin?: boolean } 
     }
     throw new ApiError(res.status, message);
   }
+  if (res.status === 204) return undefined as T;
   return (await res.json()) as T;
 }
+
+function post<T>(path: string, body?: unknown): Promise<T> {
+  return request<T>(path, { method: "POST", admin: true, body: body === undefined ? undefined : JSON.stringify(body) });
+}
+
+function patch<T>(path: string, body: unknown): Promise<T> {
+  return request<T>(path, { method: "PATCH", admin: true, body: JSON.stringify(body) });
+}
+
+function query(params: Record<string, string | number | undefined>): string {
+  const qs = new URLSearchParams();
+  for (const [k, v] of Object.entries(params)) if (v !== undefined && v !== "") qs.set(k, String(v));
+  const s = qs.toString();
+  return s ? `?${s}` : "";
+}
+
+const id = (v: string) => encodeURIComponent(v);
 
 // --- Checkout (publik) ---
 
@@ -159,3 +177,194 @@ export function createTestTransaction(amount: number): Promise<{ id: string }> {
     body: JSON.stringify({ amount }),
   });
 }
+
+export interface Paged<T, C extends string = string> {
+  items: T[];
+  total: number;
+  page: number;
+  per_page: number;
+  counts: Record<C, number>;
+}
+
+// --- Proyek & API key ---
+
+export interface Project {
+  id: string;
+  name: string;
+  webhook_url: string | null;
+  default_return_url: string | null;
+  default_qris_source_id: string | null;
+  default_expiry_min: number;
+  created_at: string;
+}
+
+export interface ApiKey {
+  id: string;
+  prefix: string;
+  last_used_at: string | null;
+  revoked_at: string | null;
+  created_at: string;
+}
+
+export interface ProjectInput {
+  name?: string;
+  webhook_url?: string | null;
+  default_return_url?: string | null;
+  default_qris_source_id?: string | null;
+  default_expiry_min?: number;
+}
+
+export const listProjects = () => request<Project[]>("/admin/projects", { admin: true });
+export const listApiKeys = (projectId: string) =>
+  request<ApiKey[]>(`/admin/projects/${id(projectId)}/api-keys`, { admin: true });
+export const createProject = (input: ProjectInput) => post<Project & { webhook_secret: string }>("/admin/projects", input);
+export const updateProject = (projectId: string, input: ProjectInput) =>
+  patch<Project>(`/admin/projects/${id(projectId)}`, input);
+export const createApiKey = (projectId: string) =>
+  post<{ id: string; prefix: string; api_key: string }>(`/admin/projects/${id(projectId)}/api-keys`);
+export const revokeApiKey = (keyId: string) => post<void>(`/admin/api-keys/${id(keyId)}/revoke`);
+
+// --- Perangkat ---
+
+export type DeviceCommand = "rescan" | "refresh_config" | "flush_queue";
+
+export interface Device {
+  id: string;
+  name: string;
+  last_heartbeat_at: string | null;
+  listener_ok: boolean | null;
+  battery: number | null;
+  charging: boolean | null;
+  queued: number | null;
+  source_app_versions: Record<string, string> | null;
+  clock_skew_ms: number | null;
+  app_version: string | null;
+  last_crash: string | null;
+  last_crash_at: string | null;
+  pending_commands: DeviceCommand[];
+  revoked_at: string | null;
+  created_at: string;
+}
+
+export interface DeviceList {
+  status: { listener_online: boolean; devices: ListenerDevice[]; server_time: string };
+  devices: Device[];
+}
+
+export interface PairingToken {
+  token: string;
+  expires_at: string;
+  pairing_uri: string;
+}
+
+export const listDevices = () => request<DeviceList>("/admin/devices", { admin: true });
+export const createPairingToken = (deviceName: string) =>
+  post<PairingToken>("/admin/devices/pairing-tokens", { device_name: deviceName });
+export const sendDeviceCommand = (deviceId: string, command: DeviceCommand) =>
+  post<{ pending_commands: DeviceCommand[] }>(`/admin/devices/${id(deviceId)}/commands`, { command });
+export const revokeDevice = (deviceId: string) => post<void>(`/admin/devices/${id(deviceId)}/revoke`);
+
+// --- QRIS ---
+
+export interface QrisSource {
+  id: string;
+  label: string;
+  merchant_name: string;
+  nmid: string | null;
+  source_package: string | null;
+  is_active: boolean;
+  created_at: string;
+}
+
+export const listQrisSources = () => request<QrisSource[]>("/admin/qris-sources", { admin: true });
+export const createQrisSource = (input: { label: string; payload: string; source_package?: string }) =>
+  post<QrisSource>("/admin/qris-sources", input);
+export const updateQrisSource = (
+  qrisId: string,
+  input: { label?: string; source_package?: string | null; is_active?: boolean },
+) => patch<QrisSource>(`/admin/qris-sources/${id(qrisId)}`, input);
+
+// --- Parser ---
+
+export interface Parser {
+  id: string;
+  package_name: string | null;
+  pattern: string;
+  priority: number;
+  auto_match: boolean;
+  is_active: boolean;
+  updated_at: string;
+}
+
+export interface ParserInput {
+  package_name?: string | null;
+  pattern?: string;
+  priority?: number;
+  auto_match?: boolean;
+  is_active?: boolean;
+}
+
+export interface ParserTestResult {
+  matched: boolean;
+  amount: number | null;
+  parser_id: string | null;
+  auto_match: boolean | null;
+}
+
+export const listParsers = () => request<Parser[]>("/admin/parsers", { admin: true });
+export const createParser = (input: ParserInput & { pattern: string }) => post<Parser>("/admin/parsers", input);
+export const updateParser = (parserId: string, input: ParserInput) => patch<Parser>(`/admin/parsers/${id(parserId)}`, input);
+export const testParser = (input: { package_name?: string; text: string; pattern?: string }) =>
+  post<ParserTestResult>("/admin/parsers/test", input);
+
+// --- Log webhook ---
+
+export type DeliveryStatus = "PENDING" | "DELIVERED" | "FAILED";
+
+export interface WebhookDelivery {
+  id: string;
+  event_id: string;
+  event_type: string;
+  project_name: string;
+  webhook_url: string | null;
+  transaction_id: string;
+  merchant_ref: string;
+  status: DeliveryStatus;
+  attempt: number;
+  last_status_code: number | null;
+  last_error: string | null;
+  next_retry_at: string | null;
+  delivered_at: string | null;
+  created_at: string;
+}
+
+export const listWebhookDeliveries = (params: { status?: DeliveryStatus; page?: number }) =>
+  request<Paged<WebhookDelivery, "ALL" | DeliveryStatus>>(`/admin/webhook-deliveries${query(params)}`, { admin: true });
+export const retryWebhookDelivery = (deliveryId: string) => post<void>(`/admin/webhook-deliveries/${id(deliveryId)}/retry`);
+
+// --- Mutasi masuk ---
+
+export type MatchStatus = "PENDING" | "MATCHED" | "LATE_MATCHED" | "UNMATCHED" | "NOT_APPLICABLE";
+export type ParseStatus = "PARSED" | "UNPARSED" | "IGNORED";
+
+export interface PaymentEvent {
+  id: string;
+  package_name: string;
+  title: string | null;
+  text: string | null;
+  device_name: string | null;
+  is_test: boolean;
+  parse_status: ParseStatus;
+  parsed_amount: number | null;
+  parser_id: string | null;
+  qris_label: string | null;
+  match_status: MatchStatus;
+  transaction_id: string | null;
+  merchant_ref: string | null;
+  posted_at: string;
+  created_at: string;
+}
+
+export const listPaymentEvents = (params: { parse_status?: ParseStatus; match_status?: MatchStatus; page?: number }) =>
+  request<Paged<PaymentEvent>>(`/admin/payment-events${query(params)}`, { admin: true });
+export const reprocessEvents = () => post<{ processed: number; matched: number }>("/admin/events/reprocess");
