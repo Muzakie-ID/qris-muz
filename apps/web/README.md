@@ -29,7 +29,7 @@ pembeli boleh membaca status (CORS).
 |---|---|---|
 | `/login` | Publik | Email + password owner, lalu kode 2FA bila aktif |
 | `/` | Login | Ringkasan per hari/minggu/bulan, pendapatan 12 bulan, status listener, status transaksi 7 hari, pembayaran terbaru, peringatan notifikasi tak terbaca |
-| `/transaksi` | Login | Daftar transaksi semua proyek: filter status, cari ref order / nominal / ID, halaman (`?status=&q=&page=`) |
+| `/transaksi` | Login | Daftar transaksi semua proyek: filter status, cari ref order / nominal / ID, halaman (`?status=&q=&page=`). Tombol **Tandai lunas** (konfirmasi manual dengan alasan) untuk tagihan menunggu/kedaluwarsa/dibatalkan |
 | `/pay/[id]` | Publik | Halaman bayar pembeli: QR, nominal unik, hitung mundur, status realtime (SSE, cadangan cek berkala), kembali otomatis ke `return_url` setelah lunas |
 | `/mutasi` | Login | Notifikasi dana masuk mentah dari HP listener: nominal terbaca, QRIS, hasil cocok (cocok, bayar telat, tidak cocok, tak terbaca, diabaikan), tombol **Proses ulang** (`?filter=&page=`) |
 | `/proyek` | Login | Buat dan ubah proyek (URL webhook, return URL, QRIS default, masa berlaku). Webhook secret dan API key ditampilkan sekali saat dibuat; daftar API key dengan prefix, terakhir dipakai, dan tombol cabut |
@@ -37,6 +37,7 @@ pembeli boleh membaca status (CORS).
 | `/qris` | Login | Daftar QRIS (merchant, NMID, package sumber). Tambah QRIS dengan unggah foto/screenshot (pilih file, seret, atau Ctrl+V; dibaca di browser dengan BarcodeDetector atau jsQR, foto tidak dikirim ke server) atau tempel teks, dengan pratinjau merchant, NMID, penyelenggara, dan cek CRC sebelum disimpan. Ubah label/package, aktif/nonaktif |
 | `/parser` | Login | Daftar pola regex, tambah/ubah (package, prioritas, cocok otomatis, aktif), alat uji teks notifikasi, peringatan notifikasi tak terbaca |
 | `/webhook` | Login | Log pengiriman webhook semua proyek: status, percobaan, respons/error terakhir, jadwal coba berikutnya, tombol **Kirim ulang** (`?status=&page=`) |
+| `/docs` | Login | Dokumentasi tata cara: cara kerja, QRIS, HP listener, proyek & API key, API transaksi (contoh curl/Node.js/PHP/Python dengan alamat API asli), webhook dan verifikasi tanda tangan, alur pembayaran, parser, Telegram & keamanan, server dan masalah umum |
 | `/pengaturan` | Login | Ganti password, nyalakan/matikan 2FA (QR authenticator), daftar sesi aktif dan cabut, notifikasi Telegram (token, chat ID, kategori, pesan uji, log), status backup dan uji restore |
 
 Tombol **Buat transaksi uji** membuat tagihan Rp1.000 sungguhan di proyek pertama (lewat

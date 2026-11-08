@@ -1,9 +1,13 @@
 import Link from "next/link";
 import { ChevronLeft, ChevronRight, Search } from "lucide-react";
+import { confirmTransactionAction } from "@/app/admin-actions";
+import { ActionForm, SubmitButton } from "@/components/admin/action-form";
+import { EditDialog } from "@/components/admin/edit-dialog";
 import { StatusBadge } from "@/components/status-badge";
 import type { TransactionList } from "@/lib/api";
 import { cn } from "@/lib/cn";
 import { formatDateTime, formatRupiah } from "@/lib/format";
+import { btnPrimary, hintCls, labelCls, textareaCls } from "@/lib/styles";
 import type { TransactionStatus } from "@/lib/types";
 
 type Filter = "ALL" | TransactionStatus;
@@ -16,6 +20,41 @@ const FILTERS: { value: Filter; label: string }[] = [
   { value: "EXPIRED", label: "Kedaluwarsa" },
   { value: "CANCELLED", label: "Dibatalkan" },
 ];
+
+/** Status yang bisa ditandai lunas manual oleh owner. */
+const CONFIRMABLE: TransactionStatus[] = ["PENDING", "EXPIRED", "CANCELLED"];
+
+/** Konfirmasi manual: pembeli sudah bayar tapi tidak cocok otomatis (mis. salah nominal). */
+function ConfirmDialog({ t }: { t: TransactionList["items"][number] }) {
+  return (
+    <EditDialog label="Tandai lunas" title={`Tandai lunas ${t.merchant_ref}`} subtitle={`${formatRupiah(t.final_amount)} · ${t.project_name}`}>
+      <p className="text-[13px] leading-relaxed text-muted">
+        Pastikan uangnya sudah masuk di aplikasi DANA Bisnis/GoPay Merchant. Proyek akan menerima webhook{" "}
+        <code className="font-mono">transaction.paid</code>, dan alasan tercatat di audit log.
+      </p>
+      <ActionForm action={confirmTransactionAction} closeOnSuccess className="flex flex-col gap-3">
+        <input type="hidden" name="transaction_id" value={t.id} />
+        <label className={labelCls}>
+          Alasan
+          <textarea
+            name="reason"
+            required
+            rows={3}
+            maxLength={500}
+            placeholder="mis. Pembeli bayar Rp50.000 via DANA pukul 10.05, tanpa kode unik"
+            className={`${textareaCls} font-sans text-sm`}
+          />
+          <span className={hintCls}>Ditampilkan di daftar transaksi sebagai catatan manual.</span>
+        </label>
+        <div>
+          <SubmitButton className={btnPrimary} pendingLabel="Menyimpan…">
+            Tandai lunas
+          </SubmitButton>
+        </div>
+      </ActionForm>
+    </EditDialog>
+  );
+}
 
 function shortId(id: string) {
   return `${id.slice(0, 6)}…${id.slice(-4)}`;
@@ -80,7 +119,7 @@ export function TransactionsTable({ data, status, q }: { data: TransactionList; 
       </div>
 
       <div className="overflow-x-auto rounded-2xl border border-line">
-        <table className="w-full min-w-[920px] border-collapse text-[13px]">
+        <table className="w-full min-w-[1020px] border-collapse text-[13px]">
           <thead>
             <tr className="bg-[#fafaf9] text-left text-muted">
               <th scope="col" className="border-b border-line px-[18px] py-3 font-medium">ID</th>
@@ -91,6 +130,7 @@ export function TransactionsTable({ data, status, q }: { data: TransactionList; 
               <th scope="col" className="border-b border-line px-[18px] py-3 text-right font-medium">Kode unik</th>
               <th scope="col" className="border-b border-line px-[18px] py-3 font-medium">Status</th>
               <th scope="col" className="border-b border-line px-[18px] py-3 font-medium">Dibuat</th>
+              <th scope="col" className="border-b border-line px-[18px] py-3"><span className="sr-only">Aksi</span></th>
             </tr>
           </thead>
           <tbody>
@@ -111,6 +151,9 @@ export function TransactionsTable({ data, status, q }: { data: TransactionList; 
                 <td className="border-b border-line-soft px-[18px] py-3.5 text-right font-mono text-xs">{String(t.unique_code).padStart(3, "0")}</td>
                 <td className="border-b border-line-soft px-[18px] py-3.5"><StatusBadge status={t.status} /></td>
                 <td className="whitespace-nowrap border-b border-line-soft px-[18px] py-3.5 text-muted">{formatDateTime(t.created_at)}</td>
+                <td className="border-b border-line-soft px-[18px] py-2 text-right">
+                  {CONFIRMABLE.includes(t.status) && <ConfirmDialog t={t} />}
+                </td>
               </tr>
             ))}
           </tbody>

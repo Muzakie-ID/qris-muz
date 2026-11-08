@@ -19,7 +19,7 @@ export function EditDialog({
   const ref = useRef<HTMLDialogElement>(null);
   return (
     <>
-      <button type="button" className={btnSecondary} onClick={() => ref.current?.showModal()}>
+      <button type="button" className={`${btnSecondary} whitespace-nowrap`} onClick={() => ref.current?.showModal()}>
         {label}
       </button>
       <dialog

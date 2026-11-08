@@ -10,6 +10,7 @@ import {
   createProject,
   createQrisSource,
   changePassword,
+  confirmTransaction,
   NOTIFY_CATEGORIES,
   reprocessEvents,
   revokeOwnerSession,
@@ -308,5 +309,16 @@ export async function testTelegramAction() {
   return run([], async () => {
     await testTelegram();
     return { message: "Pesan uji terkirim. Cek chat Telegram Anda." };
+  });
+}
+
+// --- Transaksi ---
+
+export async function confirmTransactionAction(_: ActionResult, form: FormData) {
+  return run(["/transaksi", "/"], async () => {
+    const reason = required(form, "reason", "Alasan");
+    if (reason.length > 500) throw new FormError("Alasan maksimal 500 karakter.");
+    await confirmTransaction(required(form, "transaction_id", "Transaksi"), reason);
+    return { message: "Ditandai lunas. Webhook transaction.paid dikirim ke proyek." };
   });
 }
