@@ -1,4 +1,5 @@
 import {
+  BookOpen,
   Braces,
   Folder,
   House,
@@ -29,4 +30,5 @@ export const SYSTEM_NAV: NavItem[] = [
   { href: "/qris", label: "QRIS", icon: QrCode, description: "Upload dan kelola QRIS statis yang dipakai untuk membuat QR dinamis." },
   { href: "/parser", label: "Parser", icon: Braces, description: "Pola pembaca notifikasi per aplikasi dan event yang gagal dibaca." },
   { href: "/webhook", label: "Log webhook", icon: Webhook, description: "Riwayat pengiriman webhook ke proyek, termasuk retry yang gagal." },
+  { href: "/docs", label: "Dokumentasi", icon: BookOpen, description: "Tata cara memakai gateway, dari menambah QRIS sampai integrasi API." },
 ];

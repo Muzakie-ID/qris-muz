@@ -132,7 +132,7 @@ qris-muz/
 | 3. Produksi | Docker Compose + Caddy (HTTPS), login owner + 2FA, sesi yang bisa dicabut, alarm Telegram, rate limiting, backup harian ke Google Drive + uji restore, halaman Pengaturan | Selesai di kode dan teruji di Docker. Menunggu deploy ke VPS dan gerbang "seminggu tanpa pembayaran hilang" |
 | 4. Penyempurnaan | Fitur Fase 2: rekonsiliasi, sandbox, statistik, HP cadangan, pengumuman suara, dll. | Belum |
 
-Semua halaman dashboard dan halaman bayar memakai data asli dari backend. Langkah deploy ke VPS
+Semua halaman dashboard dan halaman bayar memakai data asli dari backend. Panduan pemakaian lengkap ada di menu **Dokumentasi** dashboard (`/docs`). Langkah deploy ke VPS
 ada di [deploy/README.md](deploy/README.md).
 
 ## Mulai cepat (lokal)

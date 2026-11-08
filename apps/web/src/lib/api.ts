@@ -201,6 +201,10 @@ export function listTransactions(params: { status?: string; q?: string; page?: n
   return request<TransactionList>(`/admin/transactions?${qs.toString()}`, { admin: true });
 }
 
+/** Tandai lunas manual (PENDING, EXPIRED, atau CANCELLED); mengirim webhook transaction.paid. */
+export const confirmTransaction = (transactionId: string, reason: string) =>
+  post<{ id: string; status: string }>(`/admin/transactions/${id(transactionId)}/confirm`, { reason });
+
 export function createTestTransaction(amount: number): Promise<{ id: string }> {
   return request<{ id: string }>("/admin/transactions/test", {
     method: "POST",
