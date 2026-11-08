@@ -1,10 +1,16 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import { and, desc, eq, gte, inArray, or } from 'drizzle-orm';
+import { and, count, desc, eq, gte, inArray, or } from 'drizzle-orm';
 import { sha256Hex } from '../common/crypto';
 import { TransactionEvents } from '../common/events.service';
 import { newId } from '../common/ids';
 import { DB, type Db, type DbOrTx } from '../db/db.module';
-import { parsers, paymentEvents, transactions } from '../db/schema';
+import {
+  devices,
+  parsers,
+  paymentEvents,
+  qrisSources,
+  transactions,
+} from '../db/schema';
 import { QrisSourcesService } from '../qris/qris-sources.service';
 import { WebhooksService } from '../webhooks/webhooks.service';
 import { parseNotification, type ParserRule } from './parser';
@@ -118,6 +124,77 @@ export class PaymentsService {
       orderBy: [desc(paymentEvents.createdAt)],
       limit,
     });
+  }
+
+  /** Mutasi masuk untuk dashboard: berhalaman, dengan nama device, QRIS, dan ref order. */
+  async listPage(q: {
+    parseStatus?: EventRow['parseStatus'];
+    matchStatus?: EventRow['matchStatus'];
+    page: number;
+    perPage: number;
+  }) {
+    const where = and(
+      q.parseStatus ? eq(paymentEvents.parseStatus, q.parseStatus) : undefined,
+      q.matchStatus ? eq(paymentEvents.matchStatus, q.matchStatus) : undefined,
+    );
+    const [rows, [{ total }], grouped] = await Promise.all([
+      this.db
+        .select({
+          e: paymentEvents,
+          deviceName: devices.name,
+          qrisLabel: qrisSources.label,
+          merchantRef: transactions.merchantRef,
+        })
+        .from(paymentEvents)
+        .leftJoin(devices, eq(devices.id, paymentEvents.deviceId))
+        .leftJoin(qrisSources, eq(qrisSources.id, paymentEvents.qrisSourceId))
+        .leftJoin(
+          transactions,
+          eq(transactions.id, paymentEvents.transactionId),
+        )
+        .where(where)
+        .orderBy(desc(paymentEvents.createdAt))
+        .limit(q.perPage)
+        .offset((q.page - 1) * q.perPage),
+      this.db.select({ total: count() }).from(paymentEvents).where(where),
+      this.db
+        .select({ status: paymentEvents.matchStatus, n: count() })
+        .from(paymentEvents)
+        .groupBy(paymentEvents.matchStatus),
+    ]);
+    const counts: Record<string, number> = { ALL: 0 };
+    for (const g of grouped) {
+      counts[g.status] = g.n;
+      counts.ALL += g.n;
+    }
+    const [{ unparsed }] = await this.db
+      .select({ unparsed: count() })
+      .from(paymentEvents)
+      .where(eq(paymentEvents.parseStatus, 'UNPARSED'));
+    counts.UNPARSED = unparsed;
+    return {
+      items: rows.map(({ e, deviceName, qrisLabel, merchantRef }) => ({
+        id: e.id,
+        package_name: e.packageName,
+        title: e.title,
+        text: e.text ?? e.bigText,
+        device_name: deviceName,
+        is_test: e.isTest,
+        parse_status: e.parseStatus,
+        parsed_amount: e.parsedAmount,
+        parser_id: e.parserId,
+        qris_label: qrisLabel,
+        match_status: e.matchStatus,
+        transaction_id: e.transactionId,
+        merchant_ref: merchantRef,
+        posted_at: e.postedAt.toISOString(),
+        created_at: e.createdAt.toISOString(),
+      })),
+      total,
+      page: q.page,
+      per_page: q.perPage,
+      counts,
+    };
   }
 
   private async ingestOne(

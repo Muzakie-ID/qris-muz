@@ -38,7 +38,7 @@ export default async function SectionPage({ params }: { params: Promise<{ sectio
         </span>
         <p className="font-medium">Halaman ini belum dibangun.</p>
         <p className="max-w-md text-faint">
-          Tampilannya menyusul bersama backend di Tahap 2. Untuk sekarang, lihat Beranda dan Transaksi.
+          Halaman ini menyusul. Untuk sekarang, kelola proyek, perangkat, QRIS, dan parser dari menu lainnya.
         </p>
         <Link href="/transaksi" className="mt-1 inline-flex h-11 items-center gap-2 rounded-full bg-ink px-5 font-medium text-white">
           Buka Transaksi

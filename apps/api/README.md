@@ -101,6 +101,15 @@ Untuk dashboard web:
 | GET | `/admin/dashboard` | Ringkasan 24 jam / 7 hari / 30 hari (dan periode sebelumnya), tagihan menunggu, status 7 hari, 5 pembayaran terbaru, pendapatan 12 bulan (WIB), status listener, jumlah notifikasi tak terbaca/tak cocok |
 | GET | `/admin/transactions` | `?status=&q=&project_id=&page=&per_page=` (maks 100). `q` mencari ref order, nominal akhir, atau ID. Berisi `counts` dan `sums` per status |
 | POST | `/admin/transactions/test` | `{ amount, project_id? }` → tagihan uji (`merchant_ref` `TEST-…`) di proyek pertama bila tidak disebut |
+| GET | `/admin/projects/:id/api-keys` | Daftar API key proyek: `prefix`, `last_used_at`, `revoked_at` (key asli tidak pernah ditampilkan lagi) |
+| GET | `/admin/devices` | `{ status, devices }`; tiap device berisi heartbeat, baterai, antrian, versi, aplikasi sumber, selisih jam, crash terakhir, perintah tertunda (tanpa secret) |
+| GET | `/admin/parsers` | Semua parser, urut prioritas |
+| POST | `/admin/parsers` | `{ pattern, package_name?, priority?, auto_match?, is_active? }`. Pola harus regex valid dengan minimal satu grup tangkap (400 bila tidak) |
+| PATCH | `/admin/parsers/:id` | Ubah sebagian kolom di atas |
+| POST | `/admin/parsers/test` | `{ text, package_name?, title?, pattern? }` → `{ matched, amount, parser_id, auto_match }`. Tanpa `pattern`, semua parser aktif dipakai seperti di produksi |
+| GET | `/admin/webhook-deliveries` | `?status=PENDING\|DELIVERED\|FAILED&page=&per_page=`, dengan nama proyek, URL webhook, ref order, dan `counts` per status |
+| POST | `/admin/webhook-deliveries/:id/retry` | Kirim ulang segera (404 bila tidak ada) |
+| GET | `/admin/payment-events` | Mutasi masuk berhalaman: `?parse_status=&match_status=&page=&per_page=`, dengan nama device, label QRIS, ref order, dan `counts` per status cocok plus `UNPARSED` |
 
 ## Cara kerja penting
 

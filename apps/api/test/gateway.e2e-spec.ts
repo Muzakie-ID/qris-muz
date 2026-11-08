@@ -775,6 +775,153 @@ describe('Gateway (e2e)', () => {
     });
   });
 
+  describe('halaman pengelolaan dashboard', () => {
+    it('daftar API key hanya menampilkan prefix, dan key yang dicabut tidak bisa dipakai', async () => {
+      const created = await admin(
+        'post',
+        `/admin/projects/${projectId}/api-keys`,
+      ).expect(201);
+      const k = created.body as { id: string; api_key: string; prefix: string };
+      const list = await admin(
+        'get',
+        `/admin/projects/${projectId}/api-keys`,
+      ).expect(200);
+      const rows = list.body as Record<string, unknown>[];
+      expect(rows.length).toBeGreaterThanOrEqual(2);
+      expect(JSON.stringify(rows)).not.toContain(k.api_key);
+      expect(rows.find((r) => r.id === k.id)).toMatchObject({
+        prefix: k.prefix,
+        revoked_at: null,
+      });
+      await admin('post', `/admin/api-keys/${k.id}/revoke`).expect(204);
+      await api('get', '/v1/status', k.api_key).expect(401);
+      const after = await admin('get', `/admin/projects/${projectId}/api-keys`);
+      expect(
+        (after.body as { id: string; revoked_at: string | null }[]).find(
+          (r) => r.id === k.id,
+        )?.revoked_at,
+      ).toEqual(expect.any(String));
+      await admin('get', '/admin/projects/prj_tidakada/api-keys').expect(404);
+    });
+
+    it('daftar device memakai snake_case dan tidak membocorkan secret', async () => {
+      const res = await admin('get', '/admin/devices').expect(200);
+      const body = res.body as {
+        status: { listener_online: boolean };
+        devices: Record<string, unknown>[];
+      };
+      const d = body.devices.find((x) => x.id === device.id)!;
+      expect(d).toMatchObject({ id: device.id, revoked_at: null });
+      expect(d).toHaveProperty('last_heartbeat_at');
+      expect(d).toHaveProperty('pending_commands');
+      expect(JSON.stringify(body)).not.toMatch(/secret/i);
+    });
+
+    it('parser bisa dibuat, diuji, diubah, dan pola rusak ditolak', async () => {
+      await admin('post', '/admin/parsers').send({ pattern: '([' }).expect(400);
+      await admin('post', '/admin/parsers')
+        .send({ pattern: 'Rp\\s?[\\d.]+' })
+        .expect(400);
+
+      const uji = await admin('post', '/admin/parsers/test')
+        .send({
+          pattern: 'masuk\\s+Rp\\s?([\\d.]+)',
+          text: 'Dana masuk Rp 12.345 dari QRIS',
+        })
+        .expect(200);
+      expect(uji.body).toMatchObject({ matched: true, amount: 12345 });
+
+      const created = await admin('post', '/admin/parsers')
+        .send({
+          package_name: 'test.bank.baru',
+          pattern: 'masuk\\s+Rp\\s?([\\d.]+)',
+          priority: 5,
+          auto_match: false,
+        })
+        .expect(201);
+      const p = created.body as { id: string };
+      expect(created.body).toMatchObject({
+        package_name: 'test.bank.baru',
+        auto_match: false,
+        is_active: true,
+      });
+
+      const viaAll = await admin('post', '/admin/parsers/test')
+        .send({ package_name: 'test.bank.baru', text: 'Dana masuk Rp 9.000' })
+        .expect(200);
+      expect(viaAll.body).toMatchObject({
+        matched: true,
+        amount: 9000,
+        parser_id: p.id,
+        auto_match: false,
+      });
+
+      await admin('patch', `/admin/parsers/${p.id}`)
+        .send({ is_active: false })
+        .expect(200);
+      const list = await admin('get', '/admin/parsers').expect(200);
+      expect(
+        (list.body as { id: string; is_active: boolean }[]).find(
+          (r) => r.id === p.id,
+        )?.is_active,
+      ).toBe(false);
+      await admin('patch', '/admin/parsers/psr_tidakada')
+        .send({ priority: 1 })
+        .expect(404);
+    });
+
+    it('log webhook dan mutasi masuk bisa difilter dan dibagi halaman', async () => {
+      const hooks = await admin(
+        'get',
+        '/admin/webhook-deliveries?per_page=2',
+      ).expect(200);
+      const h = hooks.body as {
+        items: { id: string; project_name: string; status: string }[];
+        total: number;
+        per_page: number;
+        counts: Record<string, number>;
+      };
+      expect(h.per_page).toBe(2);
+      expect(h.items.length).toBeLessThanOrEqual(2);
+      expect(h.total).toBe(h.counts.ALL);
+      expect(h.items[0]).toHaveProperty('project_name');
+      const delivered = await admin(
+        'get',
+        '/admin/webhook-deliveries?status=DELIVERED',
+      ).expect(200);
+      expect(
+        (delivered.body as { items: { status: string }[] }).items.every(
+          (i) => i.status === 'DELIVERED',
+        ),
+      ).toBe(true);
+      await admin('get', '/admin/webhook-deliveries?status=SALAH').expect(400);
+      await admin(
+        'post',
+        '/admin/webhook-deliveries/whd_tidakada/retry',
+      ).expect(404);
+
+      const ev = await admin(
+        'get',
+        '/admin/payment-events?match_status=MATCHED',
+      ).expect(200);
+      const e = ev.body as {
+        items: { match_status: string; merchant_ref: string | null }[];
+        counts: Record<string, number>;
+      };
+      expect(e.items.length).toBeGreaterThan(0);
+      expect(e.items.every((i) => i.match_status === 'MATCHED')).toBe(true);
+      expect(e.items.every((i) => i.merchant_ref)).toBe(true);
+      expect(e.counts.ALL).toBeGreaterThanOrEqual(e.items.length);
+      const unparsed = await admin(
+        'get',
+        '/admin/payment-events?parse_status=UNPARSED',
+      ).expect(200);
+      expect((unparsed.body as { total: number }).total).toBe(
+        (unparsed.body as { counts: { UNPARSED: number } }).counts.UNPARSED,
+      );
+    });
+  });
+
   it('memproses ulang event setelah package QRIS diperbaiki', async () => {
     const t = await createTx({ amount: 17000, merchant_ref: 'REPROSES' });
     // Package belum didaftarkan: notifikasi disimpan tapi diabaikan.

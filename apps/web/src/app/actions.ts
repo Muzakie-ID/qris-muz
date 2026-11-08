@@ -37,7 +37,7 @@ export async function logout(): Promise<void> {
   redirect("/login");
 }
 
-async function requireSession() {
+export async function requireSession() {
   if (!(await verifySessionValue((await cookies()).get(SESSION_COOKIE)?.value))) redirect("/login");
 }
 

@@ -105,6 +105,22 @@ export class ProjectsService {
     return { ...row, key };
   }
 
+  /** Daftar API key proyek (tanpa key asli; hanya prefix). */
+  async listApiKeys(projectId: string) {
+    await this.get(projectId);
+    return this.db
+      .select({
+        id: apiKeys.id,
+        prefix: apiKeys.prefix,
+        lastUsedAt: apiKeys.lastUsedAt,
+        revokedAt: apiKeys.revokedAt,
+        createdAt: apiKeys.createdAt,
+      })
+      .from(apiKeys)
+      .where(eq(apiKeys.projectId, projectId))
+      .orderBy(apiKeys.createdAt);
+  }
+
   async revokeApiKey(keyId: string) {
     const [row] = await this.db
       .update(apiKeys)
