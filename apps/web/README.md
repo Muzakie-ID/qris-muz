@@ -34,7 +34,7 @@ pembeli boleh membaca status (CORS).
 | `/mutasi` | Login | Notifikasi dana masuk mentah dari HP listener: nominal terbaca, QRIS, hasil cocok (cocok, bayar telat, tidak cocok, tak terbaca, diabaikan), tombol **Proses ulang** (`?filter=&page=`) |
 | `/proyek` | Login | Buat dan ubah proyek (URL webhook, return URL, QRIS default, masa berlaku). Webhook secret dan API key ditampilkan sekali saat dibuat; daftar API key dengan prefix, terakhir dipakai, dan tombol cabut |
 | `/perangkat` | Login | Kartu HP listener: online, heartbeat, baterai, antrian, akses notifikasi, versi, selisih jam, aplikasi sumber, crash terakhir. Kirim perintah (kirim antrian, pindai ulang, muat ulang konfigurasi), cabut, dan pairing baru dengan QR + token |
-| `/qris` | Login | Daftar QRIS (merchant, NMID, package sumber), tambah dari teks QRIS statis, ubah label/package, aktif/nonaktif |
+| `/qris` | Login | Daftar QRIS (merchant, NMID, package sumber). Tambah QRIS dengan unggah foto/screenshot (pilih file, seret, atau Ctrl+V; dibaca di browser dengan BarcodeDetector atau jsQR, foto tidak dikirim ke server) atau tempel teks, dengan pratinjau merchant, NMID, penyelenggara, dan cek CRC sebelum disimpan. Ubah label/package, aktif/nonaktif |
 | `/parser` | Login | Daftar pola regex, tambah/ubah (package, prioritas, cocok otomatis, aktif), alat uji teks notifikasi, peringatan notifikasi tak terbaca |
 | `/webhook` | Login | Log pengiriman webhook semua proyek: status, percobaan, respons/error terakhir, jadwal coba berikutnya, tombol **Kirim ulang** (`?status=&page=`) |
 | `/pengaturan` | Login | Ganti password, nyalakan/matikan 2FA (QR authenticator), daftar sesi aktif dan cabut, notifikasi Telegram (token, chat ID, kategori, pesan uji, log), status backup dan uji restore |
