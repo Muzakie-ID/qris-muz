@@ -124,12 +124,13 @@ qris-muz/
 | Tahap | Isi | Status |
 |---|---|---|
 | 1. Core QRIS | Konversi statis → dinamis, CRC16, gambar QR, alat uji | Selesai. Gerbang uji scan di e-wallet menunggu QRIS asli |
-| 2. MVP otomatis | API transaksi, multi-QRIS, API device, parser, pencocokan, webhook, checkout SSE, aplikasi listener | Selesai di kode, teruji otomatis. Uji pembayaran sungguhan menunggu deploy |
-| 3. Produksi | Deploy VPS, login owner + 2FA, notifikasi Telegram, rate limiting, backup, web tersambung ke API | Belum |
+| 2. MVP otomatis | API transaksi, multi-QRIS, API device, parser, pencocokan, webhook, checkout SSE, aplikasi listener, dashboard dan halaman bayar tersambung ke API | Selesai di kode, teruji otomatis. Uji pembayaran sungguhan menunggu deploy |
+| 3. Produksi | Deploy VPS, login owner + 2FA (sekarang password sementara), notifikasi Telegram, rate limiting, backup, halaman Proyek/Perangkat/QRIS/Parser di dashboard | Belum |
 | 4. Penyempurnaan | Fitur Fase 2: rekonsiliasi, sandbox, statistik, HP cadangan, pengumuman suara, dll. | Belum |
 
-Catatan: dashboard dan halaman checkout di `apps/web` masih memakai **data contoh** dan belum
-tersambung ke API.
+Dashboard (Beranda, Transaksi) dan halaman bayar sudah memakai data asli dari backend. Halaman
+Proyek, Perangkat, QRIS, Parser, dan Log webhook di dashboard masih menyusul; untuk sementara
+pengelolaannya lewat endpoint admin.
 
 ## Mulai cepat (lokal)
 
@@ -165,10 +166,12 @@ curl localhost:3001/health # {"status":"ok"}
 ```bash
 cd apps/web
 npm install
-npm run dev                # http://localhost:3000
+cp .env.example .env.local
+# Isi ADMIN_TOKEN (sama dengan backend), DASHBOARD_PASSWORD, dan SESSION_SECRET.
+npm run dev                # http://localhost:3000, login dengan DASHBOARD_PASSWORD
 ```
 
-Contoh halaman checkout: `http://localhost:3000/pay/01JC8Q4V7QF2`.
+Tombol **Buat transaksi uji** di dashboard membuat tagihan Rp1.000 dan membuka halaman bayarnya.
 
 ### 4. Aplikasi listener
 
@@ -381,6 +384,6 @@ Variabel lingkungan backend (lihat [apps/api/.env.example](apps/api/.env.example
 
 1. Deploy ke VPS (Docker Compose + Caddy untuk HTTPS) dan uji pembayaran sungguhan dari HP listener.
 2. Login owner dengan 2FA, menggantikan `ADMIN_TOKEN`.
-3. Sambungkan dashboard dan halaman checkout ke API.
+3. Halaman Proyek, Perangkat (pairing dengan QR), QRIS, Parser, dan Log webhook di dashboard.
 4. Notifikasi Telegram (pembayaran masuk, listener offline, notifikasi tak terbaca), rate limiting,
    dan backup harian `pg_dump` ke Google Drive lewat rclone.

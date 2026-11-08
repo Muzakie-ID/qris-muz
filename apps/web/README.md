@@ -1,29 +1,47 @@
 # qrismuz — web (dashboard + checkout)
 
-Next.js (App Router) + Tailwind CSS. Ikon dari [Lucide](https://lucide.dev), font Geist.
+Next.js 15 (App Router) + Tailwind CSS 4. Ikon dari [Lucide](https://lucide.dev), font Geist.
+Semua data diambil dari backend `apps/api`; tidak ada data contoh lagi.
 
 ## Menjalankan
 
 ```bash
 cd apps/web
 npm install
-npm run dev      # http://localhost:3000
+cp .env.example .env.local   # isi ADMIN_TOKEN, DASHBOARD_PASSWORD, SESSION_SECRET
+npm run dev                  # http://localhost:3000
 ```
+
+Backend harus sudah berjalan (lihat `apps/api/README.md`).
+
+| Variabel | Keterangan |
+|---|---|
+| `API_URL` | Alamat backend dari server Next.js, mis. `http://localhost:3001` |
+| `NEXT_PUBLIC_API_URL` | Alamat backend yang dibuka browser pembeli (status realtime di halaman bayar) |
+| `ADMIN_TOKEN` | Sama dengan `ADMIN_TOKEN` backend. Hanya dipakai di server, tidak pernah dikirim ke browser |
+| `DASHBOARD_PASSWORD` | Password login dashboard |
+| `SESSION_SECRET` | Kunci tanda tangan cookie sesi, minimal 24 karakter (`openssl rand -base64 32`) |
+
+Di backend, `CHECKOUT_BASE_URL` harus berisi alamat web ini agar `checkout_url` benar dan browser
+pembeli boleh membaca status (CORS).
 
 ## Halaman
 
-| Rute | Isi |
-|---|---|
-| `/` | Beranda: ringkasan, grafik pendapatan (Fase 2), status listener, pembayaran terbaru |
-| `/transaksi` | Daftar transaksi dengan filter status dan pencarian |
-| `/pay/[id]` | Halaman checkout pembeli, contoh: `/pay/01JC8Q4V7QF2` |
-| `/mutasi`, `/proyek`, `/perangkat`, `/qris`, `/parser`, `/webhook`, `/pengaturan` | Halaman sementara, dibangun bersama backend |
+| Rute | Akses | Isi |
+|---|---|---|
+| `/login` | Publik | Masuk dengan `DASHBOARD_PASSWORD` (sesi 12 jam) |
+| `/` | Login | Ringkasan per hari/minggu/bulan, pendapatan 12 bulan, status listener, status transaksi 7 hari, pembayaran terbaru, peringatan notifikasi tak terbaca |
+| `/transaksi` | Login | Daftar transaksi semua proyek: filter status, cari ref order / nominal / ID, halaman (`?status=&q=&page=`) |
+| `/pay/[id]` | Publik | Halaman bayar pembeli: QR, nominal unik, hitung mundur, status realtime (SSE, cadangan cek berkala), kembali otomatis ke `return_url` setelah lunas |
+| `/mutasi`, `/proyek`, `/perangkat`, `/qris`, `/parser`, `/webhook`, `/pengaturan` | Login | Halaman sementara, menyusul |
 
-## Data
+Tombol **Buat transaksi uji** membuat tagihan Rp1.000 sungguhan di proyek pertama (lewat
+`POST /admin/transactions/test`) lalu membuka halaman bayarnya.
 
-Semua data masih **contoh** dari `src/lib/mock-data.ts`. Bentuk datanya ada di
-`src/lib/types.ts` dan mengikuti PRD (`docs/PRD.md`). Saat backend NestJS siap,
-fungsi di `mock-data.ts` diganti dengan panggilan API tanpa mengubah komponen.
+## Cara kerja
 
-QR di halaman checkout dibuat dari teks contoh, bukan payload QRIS asli, jadi
-tidak bisa dibayar. Tombol "Simulasikan lunas" hanya muncul di mode demo.
+- Halaman dashboard adalah server component yang memanggil endpoint admin backend
+  (`src/lib/api.ts`) dengan `ADMIN_TOKEN` dari server.
+- `src/middleware.ts` mewajibkan login untuk semua halaman kecuali `/login` dan `/pay/*`.
+  Cookie sesi ditandatangani HMAC dengan `SESSION_SECRET` (`src/lib/session.ts`).
+- Login ini sementara sampai login owner + 2FA dibuat di Tahap 3.

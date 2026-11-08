@@ -234,6 +234,10 @@ export class DevicesService implements OnModuleInit, OnModuleDestroy {
         name: true,
         lastHeartbeatAt: true,
         listenerOk: true,
+        battery: true,
+        charging: true,
+        queued: true,
+        appVersion: true,
       },
     });
     const list = active.map((d) => ({
@@ -244,6 +248,10 @@ export class DevicesService implements OnModuleInit, OnModuleDestroy {
         Date.now() - d.lastHeartbeatAt.getTime() < offlineAfterMs &&
         d.listenerOk === true,
       last_heartbeat_at: d.lastHeartbeatAt?.toISOString() ?? null,
+      battery: d.battery,
+      charging: d.charging,
+      queued: d.queued,
+      app_version: d.appVersion,
     }));
     const online = list.some((d) => d.online);
     return {

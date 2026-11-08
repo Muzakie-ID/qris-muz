@@ -1,42 +1,92 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { QRCodeSVG } from "qrcode.react";
 import { ArrowRight, Check, Clock, Copy, ShieldCheck } from "lucide-react";
+import type { CheckoutData } from "@/lib/api";
 import { formatCountdown, formatRupiah, splitUniqueCode } from "@/lib/format";
-import type { Transaction } from "@/lib/types";
+import type { TransactionStatus } from "@/lib/types";
 
 type View = "waiting" | "paid" | "expired";
 
-function secondsLeft(expiresAt: string) {
-  return Math.max(0, Math.round((new Date(expiresAt).getTime() - Date.now()) / 1000));
+const REDIRECT_SECONDS = 3;
+
+function viewOf(status: TransactionStatus, payable: boolean): View {
+  if (status === "PAID" || status === "LATE_PAID") return "paid";
+  if (status === "PENDING" && payable) return "waiting";
+  return "expired";
 }
 
-export function CheckoutView({ tx, demo }: { tx: Transaction; demo: boolean }) {
-  // Mode demo: hitung mundur 15 menit dari saat halaman dibuka, karena data contohnya statis.
-  const [deadline] = useState(() =>
-    demo ? new Date(Date.now() + 15 * 60_000).toISOString() : tx.expiresAt,
-  );
-  const initial: View = tx.status === "PAID" || tx.status === "LATE_PAID" ? "paid" : tx.status === "PENDING" ? "waiting" : "expired";
-  const [view, setView] = useState<View>(initial);
+export function CheckoutView({ initial, apiUrl }: { initial: CheckoutData; apiUrl: string }) {
+  // Selisih jam browser dan server, agar hitung mundur tidak terpengaruh jam HP pembeli.
+  const [offset] = useState(() => new Date(initial.server_time).getTime() - Date.now());
+  const expiresAt = useMemo(() => new Date(initial.expires_at).getTime(), [initial.expires_at]);
+  const [status, setStatus] = useState<TransactionStatus>(initial.status);
   const [left, setLeft] = useState<number | null>(null);
   const [copied, setCopied] = useState(false);
+  const [redirectIn, setRedirectIn] = useState<number | null>(null);
 
+  const view = viewOf(status, initial.qris_payload !== null && (left === null || left > 0));
+
+  // Hitung mundur.
   useEffect(() => {
     if (view !== "waiting") return;
-    const tick = () => {
-      const s = secondsLeft(deadline);
-      setLeft(s);
-      if (s === 0) setView("expired");
-    };
+    const tick = () => setLeft(Math.max(0, Math.round((expiresAt - (Date.now() + offset)) / 1000)));
     tick();
     const id = setInterval(tick, 1000);
     return () => clearInterval(id);
-  }, [view, deadline]);
+  }, [view, expiresAt, offset]);
+
+  // Status realtime dari server (SSE); bila SSE gagal, cek berkala.
+  useEffect(() => {
+    if (initial.status !== "PENDING") return;
+    let poll: ReturnType<typeof setInterval> | undefined;
+    const source = new EventSource(`${apiUrl}/public/checkout/${initial.id}/events`);
+    source.addEventListener("status", (e) => {
+      try {
+        setStatus((JSON.parse((e as MessageEvent<string>).data) as { status: TransactionStatus }).status);
+      } catch {
+        // abaikan pesan rusak
+      }
+    });
+    source.onerror = () => {
+      if (poll) return;
+      poll = setInterval(async () => {
+        try {
+          const res = await fetch(`${apiUrl}/public/checkout/${initial.id}`, { cache: "no-store" });
+          if (res.ok) setStatus(((await res.json()) as CheckoutData).status);
+        } catch {
+          // coba lagi di putaran berikutnya
+        }
+      }, 10_000);
+    };
+    return () => {
+      source.close();
+      if (poll) clearInterval(poll);
+    };
+  }, [apiUrl, initial.id, initial.status]);
+
+  // Setelah lunas, kembali otomatis ke proyek.
+  useEffect(() => {
+    if (view !== "paid" || !initial.return_url) return;
+    setRedirectIn(REDIRECT_SECONDS);
+    const id = setInterval(() => {
+      setRedirectIn((s) => {
+        if (s === null) return s;
+        if (s <= 1) {
+          clearInterval(id);
+          window.location.href = initial.return_url!;
+          return 0;
+        }
+        return s - 1;
+      });
+    }, 1000);
+    return () => clearInterval(id);
+  }, [view, initial.return_url]);
 
   const copyAmount = async () => {
     try {
-      await navigator.clipboard.writeText(String(tx.finalAmount));
+      await navigator.clipboard.writeText(String(initial.final_amount));
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
@@ -44,19 +94,19 @@ export function CheckoutView({ tx, demo }: { tx: Transaction; demo: boolean }) {
     }
   };
 
-  const { head, tail } = splitUniqueCode(tx.finalAmount);
-  const back = tx.returnUrl ?? "#";
+  const { head, tail } = splitUniqueCode(initial.final_amount);
+  const back = initial.return_url;
 
   return (
     <div className="mx-auto flex min-h-screen w-full max-w-[420px] flex-col gap-3 p-4">
       <header className="flex items-center justify-between px-1 pt-1">
         <div className="flex items-center gap-2.5">
           <span className="flex size-9 items-center justify-center rounded-[10px] bg-ink font-semibold text-white">
-            {tx.projectName.charAt(0)}
+            {initial.project_name.charAt(0).toUpperCase()}
           </span>
           <span className="flex flex-col leading-tight">
-            <span className="font-medium">{tx.projectName}</span>
-            <span className="text-xs text-faint">{tx.merchantRef}</span>
+            <span className="font-medium">{initial.project_name}</span>
+            <span className="text-xs text-faint">{initial.merchant_ref}</span>
           </span>
         </div>
         <span className="inline-flex items-center gap-1.5 text-xs text-muted">
@@ -65,7 +115,7 @@ export function CheckoutView({ tx, demo }: { tx: Transaction; demo: boolean }) {
         </span>
       </header>
 
-      {view === "waiting" && (
+      {view === "waiting" && initial.qris_payload && (
         <>
           <section className="flex flex-col gap-3.5 rounded-[20px] border border-line bg-surface p-[18px]">
             <div className="flex items-start justify-between gap-3">
@@ -92,17 +142,18 @@ export function CheckoutView({ tx, demo }: { tx: Transaction; demo: boolean }) {
             <div className="flex flex-col items-center gap-2.5 border-t border-line-soft pb-1 pt-3.5">
               <div className="rounded-2xl border border-line bg-surface p-2.5">
                 <QRCodeSVG
-                  value={tx.qrisPayload}
-                  size={196}
+                  value={initial.qris_payload}
+                  size={220}
                   marginSize={1}
                   level="M"
                   fgColor="#111111"
                   role="img"
-                  aria-label={`Kode QR pembayaran ${formatRupiah(tx.finalAmount)}`}
+                  aria-label={`Kode QR pembayaran ${formatRupiah(initial.final_amount)}`}
                 />
               </div>
               <span className="text-center text-xs text-faint">
-                Dibayar ke {tx.merchantName} · NMID {tx.nmid}
+                Dibayar ke {initial.merchant_name}
+                {initial.nmid ? ` · NMID ${initial.nmid}` : ""}
               </span>
               <span className="inline-flex h-[30px] items-center gap-1.5 rounded-full bg-subtle px-3 text-[13px]">
                 <Clock className="size-3.5" strokeWidth={1.75} aria-hidden />
@@ -118,7 +169,7 @@ export function CheckoutView({ tx, demo }: { tx: Transaction; demo: boolean }) {
               <li>Buka aplikasi e-wallet atau m-banking apa pun.</li>
               <li>Scan QR di atas.</li>
               <li>
-                Pastikan nominal <strong className="font-medium">{formatRupiah(tx.finalAmount)}</strong>, lalu bayar.
+                Pastikan nominal <strong className="font-medium">{formatRupiah(initial.final_amount)}</strong>, lalu bayar.
               </li>
             </ol>
           </section>
@@ -127,16 +178,6 @@ export function CheckoutView({ tx, demo }: { tx: Transaction; demo: boolean }) {
             <span className="size-2 shrink-0 animate-pulse rounded-full bg-warn-dot" aria-hidden />
             Menunggu pembayaran. Halaman ini pindah otomatis setelah lunas.
           </div>
-
-          {demo && (
-            <button
-              type="button"
-              onClick={() => setView("paid")}
-              className="h-11 rounded-full border border-dashed border-[#bdbdb9] text-[13px] text-muted hover:text-ink"
-            >
-              Simulasikan lunas (khusus demo)
-            </button>
-          )}
         </>
       )}
 
@@ -146,20 +187,21 @@ export function CheckoutView({ tx, demo }: { tx: Transaction; demo: boolean }) {
             <Check className="size-[30px] text-ok" strokeWidth={2} aria-hidden />
           </span>
           <h1 className="text-[22px] font-medium tracking-[-0.02em]">Pembayaran diterima</h1>
-          <span className="text-[30px] font-medium tracking-[-0.03em] tabular-nums">{formatRupiah(tx.finalAmount)}</span>
-          <p className="leading-relaxed text-muted">
-            {tx.merchantRef} sudah lunas.
-            <br />
-            Kamu bisa kembali ke {tx.projectName} sekarang.
+          <span className="text-[30px] font-medium tracking-[-0.03em] tabular-nums">{formatRupiah(initial.final_amount)}</span>
+          <p className="leading-relaxed text-muted" role="status">
+            {initial.merchant_ref} sudah lunas.
+            {back && redirectIn !== null && (
+              <>
+                <br />
+                Kembali ke {initial.project_name} dalam {redirectIn} detik.
+              </>
+            )}
           </p>
-          <a href={back} className="mt-2 inline-flex h-11 items-center gap-2 rounded-full bg-ink px-5 font-medium text-white">
-            Kembali ke {tx.projectName}
-            <ArrowRight className="size-4" strokeWidth={1.75} aria-hidden />
-          </a>
-          {demo && (
-            <button type="button" onClick={() => setView("waiting")} className="h-10 px-3.5 text-[13px] text-faint underline">
-              Ulangi simulasi
-            </button>
+          {back && (
+            <a href={back} className="mt-2 inline-flex h-11 items-center gap-2 rounded-full bg-ink px-5 font-medium text-white">
+              Kembali ke {initial.project_name}
+              <ArrowRight className="size-4" strokeWidth={1.75} aria-hidden />
+            </a>
           )}
         </section>
       )}
@@ -169,14 +211,18 @@ export function CheckoutView({ tx, demo }: { tx: Transaction; demo: boolean }) {
           <span className="flex size-16 items-center justify-center rounded-full bg-subtle">
             <Clock className="size-7 text-muted" strokeWidth={1.75} aria-hidden />
           </span>
-          <h1 className="text-[22px] font-medium tracking-[-0.02em]">Tagihan kedaluwarsa</h1>
+          <h1 className="text-[22px] font-medium tracking-[-0.02em]">
+            {status === "CANCELLED" ? "Tagihan dibatalkan" : "Tagihan kedaluwarsa"}
+          </h1>
           <p className="leading-relaxed text-muted">
-            Batas waktu pembayaran {tx.merchantRef} sudah lewat, jadi QR tidak ditampilkan lagi. Buat pesanan baru di {tx.projectName}{" "}
-            untuk mendapatkan tagihan baru.
+            {status === "CANCELLED" ? `Tagihan ${initial.merchant_ref} sudah dibatalkan` : `Batas waktu pembayaran ${initial.merchant_ref} sudah lewat`}
+            , jadi QR tidak ditampilkan lagi. Buat pesanan baru di {initial.project_name} untuk mendapatkan tagihan baru.
           </p>
-          <a href={back} className="mt-2 inline-flex h-11 items-center gap-2 rounded-full bg-ink px-5 font-medium text-white">
-            Kembali ke {tx.projectName}
-          </a>
+          {back && (
+            <a href={back} className="mt-2 inline-flex h-11 items-center gap-2 rounded-full bg-ink px-5 font-medium text-white">
+              Kembali ke {initial.project_name}
+            </a>
+          )}
         </section>
       )}
 

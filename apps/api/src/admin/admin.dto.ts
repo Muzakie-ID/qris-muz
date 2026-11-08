@@ -11,6 +11,7 @@ import {
   Min,
   ValidateIf,
 } from 'class-validator';
+import { Type } from 'class-transformer';
 
 const URL_OPTS = {
   require_tld: false,
@@ -66,4 +67,26 @@ export class ListEventsQuery {
   @IsIn(['PENDING', 'MATCHED', 'LATE_MATCHED', 'UNMATCHED', 'NOT_APPLICABLE'])
   match_status?:
     'PENDING' | 'MATCHED' | 'LATE_MATCHED' | 'UNMATCHED' | 'NOT_APPLICABLE';
+}
+
+export class ListTransactionsQueryDto {
+  @IsOptional()
+  @IsIn(['PENDING', 'PAID', 'EXPIRED', 'CANCELLED', 'LATE_PAID'])
+  status?: 'PENDING' | 'PAID' | 'EXPIRED' | 'CANCELLED' | 'LATE_PAID';
+
+  @IsOptional() @IsString() @MaxLength(100) q?: string;
+  @IsOptional() @IsString() project_id?: string;
+
+  @IsOptional() @Type(() => Number) @IsInt() @Min(1) page?: number;
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(100)
+  per_page?: number;
+}
+
+export class TestTransactionDto {
+  @IsInt() @Min(1) @Max(1_000_000) amount!: number;
+  @IsOptional() @IsString() project_id?: string;
 }

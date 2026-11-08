@@ -7,6 +7,7 @@ import {
   Patch,
   Post,
   Query,
+  UnprocessableEntityException,
   UseGuards,
 } from '@nestjs/common';
 import { AuditService } from '../common/audit.service';
@@ -22,10 +23,13 @@ import { ConfirmTransactionDto } from '../transactions/transactions.dto';
 import { TransactionsService } from '../transactions/transactions.service';
 import { WebhooksService } from '../webhooks/webhooks.service';
 import { AdminGuard } from './admin.guard';
+import { DashboardService } from './dashboard.service';
 import {
   CreateProjectDto,
   CreateQrisSourceDto,
   ListEventsQuery,
+  ListTransactionsQueryDto,
+  TestTransactionDto,
   UpdateProjectDto,
   UpdateQrisSourceDto,
 } from './admin.dto';
@@ -66,7 +70,48 @@ export class AdminController {
     private readonly payments: PaymentsService,
     private readonly webhooks: WebhooksService,
     private readonly audit: AuditService,
+    private readonly dashboard: DashboardService,
   ) {}
+
+  // --- Dashboard ---
+  @Get('dashboard')
+  overview() {
+    return this.dashboard.overview();
+  }
+
+  @Get('transactions')
+  listTransactions(@Query() q: ListTransactionsQueryDto) {
+    return this.dashboard.listTransactions({
+      status: q.status,
+      q: q.q,
+      projectId: q.project_id,
+      page: q.page ?? 1,
+      perPage: q.per_page ?? 20,
+    });
+  }
+
+  /** Tagihan uji dari dashboard (tombol "Buat transaksi uji"). Memakai proyek pertama bila tidak disebut. */
+  @Post('transactions/test')
+  async createTestTransaction(@Body() dto: TestTransactionDto) {
+    const project = dto.project_id
+      ? await this.projects.get(dto.project_id)
+      : (await this.projects.list())[0];
+    if (!project) {
+      throw new UnprocessableEntityException(
+        'Belum ada proyek. Buat proyek dulu lewat POST /admin/projects.',
+      );
+    }
+    const { transaction } = await this.transactions.create(project, {
+      amount: dto.amount,
+      merchantRef: `TEST-${Date.now()}`,
+      metadata: { test: true },
+    });
+    await this.audit.log('transaction.test_created', transaction.id, {
+      amount: dto.amount,
+      projectId: project.id,
+    });
+    return this.transactions.view(transaction);
+  }
 
   // --- QRIS ---
   @Get('qris-sources')

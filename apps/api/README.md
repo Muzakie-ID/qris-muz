@@ -94,6 +94,14 @@ perangkat (`/admin/devices`, pairing, cabut), konfirmasi manual (`POST /admin/tr
 dengan `{ reason }`), log webhook dan kirim ulang, daftar event (`/admin/events?parse_status=UNPARSED`),
 dan proses ulang event (`POST /admin/events/reprocess`). Semua aksi tercatat di `audit_logs`.
 
+Untuk dashboard web:
+
+| Method | Rute | Isi |
+|---|---|---|
+| GET | `/admin/dashboard` | Ringkasan 24 jam / 7 hari / 30 hari (dan periode sebelumnya), tagihan menunggu, status 7 hari, 5 pembayaran terbaru, pendapatan 12 bulan (WIB), status listener, jumlah notifikasi tak terbaca/tak cocok |
+| GET | `/admin/transactions` | `?status=&q=&project_id=&page=&per_page=` (maks 100). `q` mencari ref order, nominal akhir, atau ID. Berisi `counts` dan `sums` per status |
+| POST | `/admin/transactions/test` | `{ amount, project_id? }` → tagihan uji (`merchant_ref` `TEST-…`) di proyek pertama bila tidak disebut |
+
 ## Cara kerja penting
 
 - **Kode unik**: 1–999 dipilih acak per QRIS, dengan kunci per QRIS di PostgreSQL (advisory lock) agar
